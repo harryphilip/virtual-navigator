@@ -435,8 +435,8 @@ def submit_route(boat_id):
         wps = [(float(p[0]), float(p[1])) for p in d.get("waypoints", [])]
     if not wps:
         return _err("no waypoints found in submission")
-    if len(wps) > 500:
-        return _err("too many waypoints (max 500)")
+    if len(wps) > 10000:
+        return _err("too many waypoints (max 10,000)")
 
     marks = get_marks(db, race["id"])
 
@@ -452,15 +452,15 @@ def submit_route(boat_id):
         if b["finished_at"]:
             return _err("boat has finished — routing is closed", 409)
 
+    for i, (lat, lon) in enumerate(wps):
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return _err(f"waypoint {i} out of range")
     row = db.execute("SELECT COALESCE(MAX(seq),-1) m FROM route_wps WHERE boat_id=? AND passed=1",
                      (boat_id,)).fetchone()
     base = row["m"] + 1
     db.execute("DELETE FROM route_wps WHERE boat_id=? AND passed=0", (boat_id,))
-    for i, (lat, lon) in enumerate(wps):
-        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-            return _err(f"waypoint {i} out of range")
-        db.execute("INSERT INTO route_wps(boat_id,seq,lat,lon) VALUES (?,?,?,?)",
-                   (boat_id, base + i, lat, lon))
+    db.executemany("INSERT INTO route_wps(boat_id,seq,lat,lon) VALUES (?,?,?,?)",
+                   [(boat_id, base + i, lat, lon) for i, (lat, lon) in enumerate(wps)])
     db.execute("INSERT INTO route_log(boat_id,submitted_at,wp_json) VALUES (?,?,?)",
                (boat_id, now, json.dumps(wps)))
     db.commit()
