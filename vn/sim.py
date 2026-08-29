@@ -11,6 +11,7 @@ can only replace waypoints not yet reached.
 import threading
 import time
 
+from .depth import get_depth_ft
 from .geo import haversine_nm, bearing_deg, destination
 from .polar import Polar
 from .wind import get_wind, get_current
@@ -60,8 +61,10 @@ def _advance(db, race, polar, marks, boat, until):
     finished = None
     side = boat["wind_side"]              # +1 wind over starboard, -1 port
     maneuvers = boat["maneuvers"] or 0
+    groundings = boat["groundings"] or 0
     penalty_h = (race["maneuver_penalty_s"] or 0.0) / 3600.0
     use_current = bool(race["currents_enabled"])
+    min_depth_ft = race["grounding_depth_ft"] or 0.0
 
     wps = [dict(r) for r in db.execute(
         "SELECT * FROM route_wps WHERE boat_id=? AND passed=0 ORDER BY seq",
@@ -73,6 +76,13 @@ def _advance(db, race, polar, marks, boat, until):
         t2 = t + step
         twd, tws, _src = get_wind(db, lat, lon, t)
         hours = step / 3600.0
+
+        # grounding: in less water than the race minimum the boat drags
+        # through at half speed for the step — slow, never disqualified
+        aground = min_depth_ft > 0 and get_depth_ft(db, lat, lon) < min_depth_ft
+        speed_scale = 0.5 if aground else 1.0
+        if aground:
+            groundings += 1
 
         if wps:
             # sail toward the next routing waypoint, possibly reaching
@@ -98,6 +108,8 @@ def _advance(db, race, polar, marks, boat, until):
                 else:                      # first step ever: pick freely
                     side = 1 if sides[1][0] >= sides[-1][0] else -1
                     vmc, hdg, twa, bsp = sides[side]
+                vmc *= speed_scale
+                bsp *= speed_scale
                 if vmc <= 0.01 or remaining <= 1e-6:
                     remaining = 0.0
                     break
@@ -142,8 +154,62 @@ def _advance(db, race, polar, marks, boat, until):
             (boat["id"], max(passed_wps)))
     db.execute(
         "UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=?, finished_at=?, "
-        "wind_side=?, maneuvers=? WHERE id=?",
-        (t, lat, lon, next_mark, finished, side, maneuvers, boat["id"]))
+        "wind_side=?, maneuvers=?, groundings=? WHERE id=?",
+        (t, lat, lon, next_mark, finished, side, maneuvers, groundings, boat["id"]))
+
+
+def enforce_course(wps, marks, next_mark, radius_nm, start_pos=None):
+    """Softly reconcile a submitted routing with the race course.
+
+    A routing exported from navigation software rarely lands exactly on the
+    race's marks — start/finish lines are placed slightly differently, and
+    roundings may pass just outside the mark radius.  Rather than letting a
+    boat park short of the finish (a de-facto DSQ) or sail a shortened
+    course (cheating), this:
+
+      * drops leading waypoints the boat is already standing on,
+      * walks the remaining course marks in order, and wherever the routing
+        never comes within the mark radius of one, inserts the mark itself
+        as a waypoint at the routing's closest approach — the boat must
+        genuinely sail to every mark, so there is nothing to gain and
+        nothing to be thrown out for.
+
+    Returns (waypoints, notes).
+    """
+    wps = list(wps)
+    notes = []
+    if start_pos is not None:
+        dropped = 0
+        while wps and haversine_nm(start_pos[0], start_pos[1],
+                                   wps[0][0], wps[0][1]) <= radius_nm:
+            wps.pop(0)
+            dropped += 1
+        if dropped:
+            notes.append(f"skipped {dropped} leading waypoint(s) already at "
+                         "your position")
+    pos = 0
+    for mk in marks[next_mark:]:
+        best_i, best_d = None, float("inf")
+        credited = False
+        for i in range(pos, len(wps)):
+            d = haversine_nm(mk["lat"], mk["lon"], wps[i][0], wps[i][1])
+            if d < best_d:
+                best_i, best_d = i, d
+            if d <= radius_nm:
+                pos = i + 1
+                credited = True
+                break
+        if not credited:
+            insert_at = best_i + 1 if best_i is not None else len(wps)
+            wps.insert(insert_at, (mk["lat"], mk["lon"]))
+            if best_d < float("inf"):
+                notes.append(f"routing misses {mk['name']} by {best_d:.1f} nm "
+                             "— a rounding waypoint was inserted")
+            else:
+                notes.append(f"routing does not reach {mk['name']} — it was "
+                             "appended to your route")
+            pos = insert_at + 1
+    return wps, notes
 
 
 def dtf_nm(lat, lon, marks, next_mark):

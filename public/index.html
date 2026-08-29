@@ -118,6 +118,10 @@
         <input id="c_pen" value="120">
       </div>
       <div>
+        <label>Grounding depth (ft — shallower = half speed)</label>
+        <input id="c_depth" value="15">
+      </div>
+      <div>
         <label style="margin-bottom:10px">Ocean currents</label>
         <label style="display:flex;align-items:center;gap:8px;margin:0">
           <input type="checkbox" id="c_cur" checked style="width:auto"> boats are set by surface current
@@ -205,6 +209,7 @@ document.getElementById('c_go').onclick = async () => {
     mark_radius_nm: +document.getElementById('c_rad').value || 2,
     maneuver_penalty_s: +document.getElementById('c_pen').value || 0,
     currents_enabled: document.getElementById('c_cur').checked,
+    grounding_depth_ft: +document.getElementById('c_depth').value || 0,
   };
   try {
     const res = await fetch('/api/races', { method: 'POST',

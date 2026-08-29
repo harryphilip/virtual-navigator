@@ -36,7 +36,25 @@ through real historical wind. Demo boats use PIN `0000`; the demo admin key is
 - **Maneuvers cost time.** The boat holds its tack until the other tack is
   clearly faster; every tack or gybe then costs `maneuver_penalty_s` seconds
   (default 120) of stopped time. Wiggly routings are slow routings; the tack
-  count shows in your boat panel.
+  count shows in your boat panel. Because the boat always steers its best
+  VMC toward the next waypoint, a wind shift that leaves a waypoint dead
+  upwind (or dead downwind) never parks the boat — it automatically sails a
+  tacking/gybing VMG course to get there.
+- **Groundings hurt but don't sink you.** Real bathymetry (NOAA global DEM,
+  cached on a ~500 m grid) is checked every step: in less water than the
+  race's `grounding_depth_ft` (default 15 ft) the boat drags through at
+  half speed. Shave the beach at your peril; steps spent aground show in
+  your boat panel. Patches narrower than one sim step can be hopped over —
+  it's a game, not a chart audit.
+- **Soft course enforcement — no cheating, no DSQ.** Routings from your own
+  software rarely land exactly on the race's marks. On submission the
+  committee reconciles them: waypoints you're already standing on are
+  skipped, and wherever the routing never passes within the mark radius of
+  a required mark (start, roundings, finish), the mark itself is inserted
+  into your route at the closest approach. You always sail the real course
+  — there is nothing to gain by cutting a mark and nothing to be
+  disqualified for when your finish line sits half a mile from ours. Every
+  adjustment is reported back when you submit.
 - **Currents set the fleet.** Real surface currents (Open-Meteo marine model,
   same 0.25° caching) push every boat — sailing or parked — so a Gulf Stream
   lane or a foul tide gate matters exactly like it does offshore. Optional

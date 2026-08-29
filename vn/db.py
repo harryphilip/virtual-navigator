@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS races (
   created_at INTEGER NOT NULL,
   maneuver_penalty_s REAL DEFAULT 120,  -- time lost per tack/gybe
   currents_enabled INTEGER DEFAULT 1,
-  yb_slug TEXT DEFAULT ''               -- linked YB tracker race, if any
+  yb_slug TEXT DEFAULT '',              -- linked YB tracker race, if any
+  grounding_depth_ft REAL DEFAULT 15    -- shallower than this: 50% speed
 );
 CREATE TABLE IF NOT EXISTS marks (
   race_id INTEGER NOT NULL,
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS boats (
   finished_at INTEGER,
   wind_side INTEGER,                    -- tack the boat is on (+1/-1)
   maneuvers INTEGER DEFAULT 0,          -- tacks + gybes so far
+  groundings INTEGER DEFAULT 0,         -- sim steps spent in shallow water
   UNIQUE (race_id, name)
 );
 CREATE TABLE IF NOT EXISTS route_wps (
@@ -88,6 +90,10 @@ CREATE TABLE IF NOT EXISTS wind_cache (
   twd REAL, tws REAL, source TEXT,
   PRIMARY KEY (lat, lon, t)
 );
+CREATE TABLE IF NOT EXISTS depth_cache (
+  lat REAL, lon REAL, depth_m REAL,     -- elevation, negative = below sea level
+  PRIMARY KEY (lat, lon)
+);
 CREATE TABLE IF NOT EXISTS current_cache (
   lat REAL, lon REAL, t INTEGER,
   cdir REAL, cspd REAL, source TEXT,    -- set toward cdir at cspd knots
@@ -118,6 +124,8 @@ MIGRATIONS = [
     "ALTER TABLE races ADD COLUMN yb_slug TEXT DEFAULT ''",
     "ALTER TABLE boats ADD COLUMN wind_side INTEGER",
     "ALTER TABLE boats ADD COLUMN maneuvers INTEGER DEFAULT 0",
+    "ALTER TABLE boats ADD COLUMN groundings INTEGER DEFAULT 0",
+    "ALTER TABLE races ADD COLUMN grounding_depth_ft REAL DEFAULT 15",
     "ALTER TABLE real_boats ADD COLUMN yb_id INTEGER",
     "ALTER TABLE real_boats ADD COLUMN last_t INTEGER",
     "ALTER TABLE real_boats ADD COLUMN last_lat REAL",

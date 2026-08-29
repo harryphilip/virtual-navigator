@@ -101,8 +101,11 @@
       waypoints through real surface wind <span id="r_cur"></span>, stepping
       <span id="r_step"></span> — it never rewinds, so what's sailed is sailed.
       Every tack or gybe costs <span id="r_pen"></span>, so a wiggly routing is a
-      slow routing. Route with the forecasts you'd have on board; the ocean
-      grades your homework in real time.
+      slow routing, and water under <span id="r_depth"></span> drags you to half
+      speed — mind the shoals. Miss a mark and the committee quietly bends your
+      route back through it: never disqualified, never shortened. Route with
+      the forecasts you'd have on board; the ocean grades your homework in
+      real time.
     </div>
   </div>
 </div>
@@ -199,6 +202,8 @@ async function loadRace() {
     race.currents_enabled ? 'and ocean current' : '(currents off)';
   document.getElementById('r_pen').textContent =
     Math.round(race.maneuver_penalty_s) + ' s';
+  document.getElementById('r_depth').textContent =
+    Math.round(race.grounding_depth_ft ?? 15) + ' ft';
   loadForecasts();
   loadDocs();
   const pts = race.marks.map(m => [m.lat, m.lon]);
@@ -370,7 +375,9 @@ async function refreshMine() {
     st.innerHTML = `<b>${esc(b.name)}</b> — no routing yet. Submit one to leave the dock.`;
   } else {
     st.innerHTML = `<b>${esc(b.name)}</b> — ${b.dtf == null ? '' : Math.round(b.dtf) + ' nm to go · '}` +
-      `${b.maneuvers} tacks/gybes · sailed through ${when(b.sim_time)} UTC (locked)`;
+      `${b.maneuvers} tacks/gybes` +
+      (b.groundings ? ` · <span style="color:var(--bad)">⚠ ${b.groundings} step(s) aground</span>` : '') +
+      ` · sailed through ${when(b.sim_time)} UTC (locked)`;
   }
   planLayer.clearLayers();
   const planCol = uiColors().plan;
@@ -461,7 +468,10 @@ async function submitRoute(payload) {
     const j = await api(`/api/boats/${my.boatId}/route`, { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pin: my.pin, ...payload }) });
-    setMsg2(`Routing accepted — ${j.waypoints} waypoints ahead of you.`, true);
+    let text = `Routing accepted — ${j.waypoints} waypoints ahead of you.`;
+    if (j.adjustments && j.adjustments.length)
+      text += ' Course adjustments: ' + j.adjustments.join('; ') + '.';
+    setMsg2(text, true);
     drawWps = []; drawLayer.clearLayers(); updateDrawUi();
     if (drawMode) document.getElementById('mb_draw').click();
     await refresh();

@@ -20,7 +20,7 @@ from vn.nor import extract_race, MAX_DOC_BYTES
 from vn.gpx import parse_coord, parse_route, parse_track, track_to_gpx
 from vn.polar import Polar
 from vn.realfleet import ingest_points, recompute
-from vn.sim import catch_up_race, dtf_nm, get_marks, race_polar
+from vn.sim import catch_up_race, dtf_nm, enforce_course, get_marks, race_polar
 
 app = Flask(__name__, static_folder="public", static_url_path="")
 
@@ -116,14 +116,15 @@ def create_race():
     cur = db.execute(
         "INSERT INTO races(name,description,start_time,perf_factor,step_minutes,"
         "mark_radius_nm,polar_name,polar_text,admin_key,created_at,"
-        "maneuver_penalty_s,currents_enabled) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        "maneuver_penalty_s,currents_enabled,grounding_depth_ft) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (name, d.get("description", ""), start,
          float(d.get("perf_factor", 0.9)), int(d.get("step_minutes", 10)),
          float(d.get("mark_radius_nm", 2.0)),
          d.get("polar_name", "race polar"), polar_text, admin_key, int(time.time()),
          float(d.get("maneuver_penalty_s", 120)),
-         1 if d.get("currents_enabled", True) else 0))
+         1 if d.get("currents_enabled", True) else 0,
+         float(d.get("grounding_depth_ft", 15))))
     race_id = cur.lastrowid
     for i, m in enumerate(marks):
         db.execute("INSERT INTO marks(race_id,seq,name,lat,lon) VALUES (?,?,?,?,?)",
@@ -147,6 +148,7 @@ def race_detail(race_id):
                     "polar_name": r["polar_name"], "marks": marks,
                     "maneuver_penalty_s": r["maneuver_penalty_s"],
                     "currents_enabled": bool(r["currents_enabled"]),
+                    "grounding_depth_ft": r["grounding_depth_ft"],
                     "yb_slug": r["yb_slug"] or ""})
 
 
@@ -315,11 +317,12 @@ def race_from_docs():
     cur = db.execute(
         "INSERT INTO races(name,description,start_time,perf_factor,step_minutes,"
         "mark_radius_nm,polar_name,polar_text,admin_key,created_at,"
-        "maneuver_penalty_s,currents_enabled) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        "maneuver_penalty_s,currents_enabled,grounding_depth_ft) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         ((ex["name"] or "Imported race")[:90], " — ".join(desc_bits), start,
          float(request.form.get("perf_factor", 0.9)), 10, 2.0,
          polar_name or "race polar", polar_text, admin_key, now,
-         float(request.form.get("maneuver_penalty_s", 120)), 1))
+         float(request.form.get("maneuver_penalty_s", 120)), 1, 15.0))
     race_id = cur.lastrowid
     for i, m in enumerate(ex["marks"][:50]):
         db.execute("INSERT INTO marks(race_id,seq,name,lat,lon) VALUES (?,?,?,?,?)",
@@ -446,11 +449,19 @@ def submit_route(boat_id):
         db.execute("UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=1 WHERE id=?",
                    (start_at, marks[0]["lat"], marks[0]["lon"], b["id"]))
         db.commit()
+        b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
     else:
         catch_up_race(db, race["id"], now)   # lock the past before editing
         b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
         if b["finished_at"]:
             return _err("boat has finished — routing is closed", 409)
+
+    # softly reconcile the routing with the course: skip waypoints already
+    # underfoot, and make sure every remaining mark (finish included) is
+    # actually visited — inserted, not disqualified, when the routing's
+    # own start/finish/mark placement differs from the race's
+    wps, adjustments = enforce_course(
+        wps, marks, b["next_mark"], race["mark_radius_nm"], (b["lat"], b["lon"]))
 
     for i, (lat, lon) in enumerate(wps):
         if not (-90 <= lat <= 90 and -180 <= lon <= 180):
@@ -465,6 +476,7 @@ def submit_route(boat_id):
                (boat_id, now, json.dumps(wps)))
     db.commit()
     return jsonify({"ok": True, "waypoints": len(wps),
+                    "adjustments": adjustments,
                     "locked_until": b["sim_time"] if b["sim_time"] else None})
 
 
@@ -489,6 +501,7 @@ def boat_detail(boat_id):
         "id": b["id"], "name": b["name"], "race_id": b["race_id"],
         "sim_time": b["sim_time"], "lat": b["lat"], "lon": b["lon"],
         "finished_at": b["finished_at"], "maneuvers": b["maneuvers"] or 0,
+        "groundings": b["groundings"] or 0,
         "dtf": dtf_nm(b["lat"], b["lon"], marks, b["next_mark"]) if b["lat"] is not None else None,
         "route": [[w["lat"], w["lon"]] for w in wps],
         "track": [dict(p) for p in _decimate(trk)],
