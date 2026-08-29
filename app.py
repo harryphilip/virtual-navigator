@@ -17,7 +17,7 @@ from vn import yb
 from vn.db import get_db
 from vn.forecast import make_snapshot
 from vn.nor import extract_race, MAX_DOC_BYTES
-from vn.gpx import parse_route, parse_track, track_to_gpx
+from vn.gpx import parse_coord, parse_route, parse_track, track_to_gpx
 from vn.polar import Polar
 from vn.realfleet import ingest_points, recompute
 from vn.sim import catch_up_race, dtf_nm, get_marks, race_polar
@@ -95,12 +95,23 @@ def create_race():
     try:
         name = d["name"].strip()
         start = _parse_time(d["start_time"])
-        marks = d["marks"]
         polar_text = d["polar_text"]
-        assert name and len(marks) >= 2
+        assert name, "race name is required"
         polar = Polar.parse(polar_text)
     except (KeyError, AssertionError, ValueError, TypeError) as e:
         return _err(f"invalid race definition: {e}")
+    marks = []
+    for i, m in enumerate(d.get("marks", [])):
+        try:
+            lat, lon = parse_coord(m["lat"]), parse_coord(m["lon"])
+            assert -90 <= lat <= 90 and -180 <= lon <= 180
+        except (KeyError, ValueError, AssertionError, TypeError):
+            return _err(f"mark {i + 1} ({m.get('name', '?')}): could not read "
+                        f"position {m.get('lat')!r}, {m.get('lon')!r} — use "
+                        "decimal degrees or degrees-minutes like 41° 27.5' N")
+        marks.append({"name": m.get("name", f"Mark {i}"), "lat": lat, "lon": lon})
+    if len(marks) < 2:
+        return _err("at least two marks (start and finish) are required")
     admin_key = secrets.token_hex(12)
     cur = db.execute(
         "INSERT INTO races(name,description,start_time,perf_factor,step_minutes,"
@@ -116,7 +127,7 @@ def create_race():
     race_id = cur.lastrowid
     for i, m in enumerate(marks):
         db.execute("INSERT INTO marks(race_id,seq,name,lat,lon) VALUES (?,?,?,?,?)",
-                   (race_id, i, m.get("name", f"Mark {i}"), float(m["lat"]), float(m["lon"])))
+                   (race_id, i, m["name"], m["lat"], m["lon"]))
     db.commit()
     return jsonify({"id": race_id, "admin_key": admin_key,
                     "polar_tws": polar.tws, "polar_twa": polar.twa})

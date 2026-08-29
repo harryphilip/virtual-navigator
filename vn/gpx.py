@@ -102,18 +102,39 @@ def _csv_points(text, want_time):
     return out
 
 
-def _coord(s):
-    """Decimal degrees, or nav-style '41 27.5 N' / '41°27.5'S'."""
-    s = s.strip()
-    try:
+_COORD_RE = re.compile(
+    r"^\s*(-?\d+(?:[.,]\d+)?)\s*°?\s*"             # degrees (may be decimal)
+    r"(?:(\d+(?:[.,]\d+)?)\s*['′’]?\s*)?"          # minutes
+    r"(?:(\d+(?:[.,]\d+)?)\s*[\"″”]?\s*)?"         # seconds
+    r"([NSEW])?\s*$", re.I)
+
+
+def parse_coord(s):
+    """One coordinate in any common form: decimal degrees ('-71.5782'),
+    decimal with hemisphere ('41.1754° N'), degrees-minutes
+    ('40° 59.2' N', '073 32.3 W'), or degrees-minutes-seconds.
+    A hemisphere letter wins over any sign on the number."""
+    if isinstance(s, (int, float)):
         return float(s)
-    except ValueError:
-        pass
-    m = re.match(r"^\s*(\d+)[°\s]+([\d.]+)['\s]*([NSEW])\s*$", s, re.I)
-    if not m:
-        raise ValueError(s)
-    val = float(m.group(1)) + float(m.group(2)) / 60.0
-    return -val if m.group(3).upper() in "SW" else val
+    m = _COORD_RE.match(str(s).strip())
+    if not m or m.group(1) is None:
+        raise ValueError(f"unreadable coordinate: {s!r}")
+    deg = float(m.group(1).replace(",", "."))
+    val = abs(deg)
+    if m.group(2):
+        val += float(m.group(2).replace(",", ".")) / 60.0
+    if m.group(3):
+        val += float(m.group(3).replace(",", ".")) / 3600.0
+    hemi = (m.group(4) or "").upper()
+    if hemi in ("S", "W"):
+        return -val
+    if hemi in ("N", "E"):
+        return val
+    return -val if deg < 0 else val
+
+
+def _coord(s):
+    return parse_coord(s)
 
 
 def _parse_iso(s):
