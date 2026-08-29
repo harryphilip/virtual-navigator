@@ -108,6 +108,7 @@ button:disabled { opacity: .45; cursor: default; }
 .lb-filters button.on { color: var(--accent); border-color: var(--accent); }
 .leaflet-container { font: inherit; }
 .dark-tiles { filter: invert(1) hue-rotate(190deg) brightness(.8) contrast(.9) saturate(.35); }
+#map.chart-mode { background: #c7d9e3; }  /* ENC water tint while tiles load */
 .boat-label {
   background: #0b1620d9; border: 1px solid var(--border); color: var(--text);
   border-radius: 4px; padding: 0 5px; font-size: 11px; white-space: nowrap;

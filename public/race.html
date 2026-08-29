@@ -121,9 +121,60 @@ let filter = 'all';
 let drawMode = false, drawWps = [];
 
 const map = L.map('map', { worldCopyJump: true }).setView([38, -60], 5);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors', maxZoom: 12, className: 'dark-tiles',
-}).addTo(map);
+
+/* base layers: NOAA ENC chart (US waters) and a dark night mode.
+   NOAA serves ENC rendering via an ArcGIS export endpoint, so each 256px
+   tile is requested as a web-mercator export. */
+const ENC_BASE = 'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline'
+  + '/MapServer/exts/MaritimeChartService/MapServer/export';
+const EncLayer = L.TileLayer.extend({
+  getTileUrl(c) {
+    const HALF = 20037508.342789244;
+    const res = (HALF * 2) / Math.pow(2, c.z);
+    const xmin = -HALF + c.x * res, ymax = HALF - c.y * res;
+    return `${ENC_BASE}?bbox=${xmin},${ymax - res},${xmin + res},${ymax}`
+      + '&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=false&f=image';
+  },
+});
+const chartLayer = new EncLayer('', { maxZoom: 15,
+  attribution: 'NOAA ENC · not for navigation' });
+const darkLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors', maxZoom: 12, className: 'dark-tiles' });
+const seamarks = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
+  maxZoom: 18, attribution: 'OpenSeaMap' });
+
+let chartMode = true;
+chartLayer.addTo(map);
+document.getElementById('map').classList.add('chart-mode');
+L.control.layers({ 'NOAA chart': chartLayer, 'Night (dark)': darkLayer },
+                 { 'Seamarks (OpenSeaMap)': seamarks }).addTo(map);
+map.on('baselayerchange', (e) => {
+  chartMode = e.name === 'NOAA chart';
+  document.getElementById('map').classList.toggle('chart-mode', chartMode);
+  redrawStyles();
+});
+function setBase(chart) {
+  if (chart === chartMode) return;
+  chartMode = chart;
+  document.getElementById('map').classList.toggle('chart-mode', chart);
+  if (chart) { map.removeLayer(darkLayer); chartLayer.addTo(map); }
+  else { map.removeLayer(chartLayer); darkLayer.addTo(map); }
+  redrawStyles();
+}
+function redrawStyles() {
+  if (race) drawCourse();
+  if (state) drawFleet();
+  if (my) refreshMine().catch(() => {});
+  updateDrawUi();
+}
+/* per-mode drawing colors — chart mode uses saturated inks that read on
+   the light ENC background; the course goes chart-magenta like a plotted
+   route */
+function uiColors() {
+  return chartMode
+    ? { course: '#c2185b', mark: '#ad1457', plan: '#1864ab', draw: '#b08900' }
+    : { course: '#8aa7bc', mark: '#ffb84d', plan: '#35c4dc', draw: '#eadd6f' };
+}
 const courseLayer = L.layerGroup().addTo(map);
 const fleetLayer = L.layerGroup().addTo(map);
 const planLayer = L.layerGroup().addTo(map);
@@ -150,18 +201,28 @@ async function loadRace() {
     Math.round(race.maneuver_penalty_s) + ' s';
   loadForecasts();
   loadDocs();
+  const pts = race.marks.map(m => [m.lat, m.lon]);
+  courseBounds = L.latLngBounds(pts).pad(0.25);
+  // ENC coverage is US waters — start foreign courses on the dark base
+  const ctr = courseBounds.getCenter();
+  setBase(ctr.lng > -130 && ctr.lng < -60 && ctr.lat > 15 && ctr.lat < 50);
+  drawCourse();
+  fitCourse();
+}
+
+function drawCourse() {
+  if (!race) return;
+  const col = uiColors();
   courseLayer.clearLayers();
   const pts = race.marks.map(m => [m.lat, m.lon]);
-  L.polyline(pts, { color: '#8aa7bc', weight: 1.5, dashArray: '6 6', opacity: .8 }).addTo(courseLayer);
+  L.polyline(pts, { color: col.course, weight: 1.5, dashArray: '6 6', opacity: .85 }).addTo(courseLayer);
   race.marks.forEach((m, i) => {
     L.circleMarker([m.lat, m.lon], {
-      radius: 6, color: '#ffb84d', weight: 2, fillColor: '#ffb84d', fillOpacity: .35,
+      radius: 6, color: col.mark, weight: 2, fillColor: col.mark, fillOpacity: .35,
     }).addTo(courseLayer).bindTooltip(
       `${i === 0 ? '⚑ ' : i === race.marks.length - 1 ? '🏁 ' : ''}${esc(m.name)}`,
       { className: 'boat-label', permanent: false });
   });
-  courseBounds = L.latLngBounds(pts).pad(0.25);
-  fitCourse();
 }
 let courseBounds = null;
 function fitCourse() {
@@ -179,8 +240,13 @@ new ResizeObserver(() => {
   if (!userMoved) fitCourse();
 }).observe(document.getElementById('map'));
 
-const palette = ['#35c4dc', '#5dd39e', '#c792ea', '#82aaff', '#f78c6c', '#eadd6f', '#ff9ecb', '#7fdbca'];
-function colorFor(e, i) { return e.type === 'real' ? '#ffb84d' : palette[i % palette.length]; }
+const paletteDark = ['#35c4dc', '#5dd39e', '#c792ea', '#82aaff', '#f78c6c', '#eadd6f', '#ff9ecb', '#7fdbca'];
+const paletteChart = ['#1864ab', '#2b8a3e', '#9c36b5', '#0b7285', '#d9480f', '#5f3dc4', '#c2255c', '#087f5b'];
+function colorFor(e, i) {
+  if (e.type === 'real') return chartMode ? '#e8590c' : '#ffb84d';
+  const p = chartMode ? paletteChart : paletteDark;
+  return p[i % p.length];
+}
 
 async function refresh() {
   state = await api(`/api/races/${raceId}/state`);
@@ -307,13 +373,14 @@ async function refreshMine() {
       `${b.maneuvers} tacks/gybes · sailed through ${when(b.sim_time)} UTC (locked)`;
   }
   planLayer.clearLayers();
+  const planCol = uiColors().plan;
   if (b.route.length && b.lat != null) {
     L.polyline([[b.lat, b.lon], ...b.route],
-      { color: '#35c4dc', weight: 2, dashArray: '3 6', opacity: .9 }).addTo(planLayer);
-    b.route.forEach(w => L.circleMarker(w, { radius: 3, color: '#35c4dc', fillOpacity: 1 })
+      { color: planCol, weight: 2, dashArray: '3 6', opacity: .9 }).addTo(planLayer);
+    b.route.forEach(w => L.circleMarker(w, { radius: 3, color: planCol, fillOpacity: 1 })
       .addTo(planLayer));
   } else if (b.route.length) {
-    L.polyline(b.route, { color: '#35c4dc', weight: 2, dashArray: '3 6', opacity: .9 }).addTo(planLayer);
+    L.polyline(b.route, { color: planCol, weight: 2, dashArray: '3 6', opacity: .9 }).addTo(planLayer);
   }
   document.getElementById('mb_subs').textContent = b.submissions.length
     ? 'Routing submissions: ' + b.submissions.map(s => `${when(s.at)} (${s.n} wps)`).slice(0, 5).join(' · ')
@@ -369,9 +436,10 @@ map.on('click', (ev) => {
 function updateDrawUi() {
   document.getElementById('mb_wp_n').textContent = drawWps.length + ' waypoints';
   drawLayer.clearLayers();
+  const drawCol = uiColors().draw;
   if (drawWps.length) {
-    L.polyline(drawWps, { color: '#eadd6f', weight: 2 }).addTo(drawLayer);
-    drawWps.forEach(w => L.circleMarker(w, { radius: 3.5, color: '#eadd6f', fillOpacity: 1 }).addTo(drawLayer));
+    L.polyline(drawWps, { color: drawCol, weight: 2 }).addTo(drawLayer);
+    drawWps.forEach(w => L.circleMarker(w, { radius: 3.5, color: drawCol, fillOpacity: 1 }).addTo(drawLayer));
   }
 }
 document.getElementById('mb_undo').onclick = () => { drawWps.pop(); updateDrawUi(); };
