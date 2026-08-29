@@ -705,8 +705,21 @@ def _ticker_loop():
         time.sleep(TICK_SECONDS)
 
 
+_ticker_started = False
+
+
 def start_ticker():
+    global _ticker_started
+    if _ticker_started:
+        return
+    _ticker_started = True
     threading.Thread(target=_ticker_loop, name="vn-ticker", daemon=True).start()
+
+
+# under a production server (gunicorn etc.) there is no __main__ entry —
+# opt into the ticker via env; run exactly one worker so it starts once
+if os.environ.get("VN_ENABLE_TICKER") == "1":
+    start_ticker()
 
 
 if __name__ == "__main__":

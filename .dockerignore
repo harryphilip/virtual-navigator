@@ -1,0 +1,7 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+data/vn.sqlite*
+.DS_Store
+.claude/
