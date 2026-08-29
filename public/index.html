@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual Navigator</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="site">
+  <div class="logo">Virtual <span class="wave">~</span> Navigator</div>
+  <div class="sub">fantasy offshore racing — route it like you're on board</div>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <h2>How it works</h2>
+    <p class="small muted" style="margin:4px 0 10px">
+      Pick a race, register a virtual boat, and submit a routing from your own
+      navigation software — like fantasy baseball, but your lineup is a set of
+      waypoints. Every virtual boat sails the <b>same polar</b> through the
+      <b>same real weather</b>; the leaderboard ranks you against the other
+      armchair navigators <i>and</i> the real boats on the tracker.
+    </p>
+    <ol class="steplist small">
+      <li><b>Download the race polar</b> and load it into Expedition, Adrena, qtVlm,
+          TimeZero, LuckGrib, PredictWind — anything that can export a route as
+          <b>GPX or CSV</b>.</li>
+      <li><b>Run your own weather routing</b> with the forecasts you'd have on board,
+          then upload the route here as your routing.</li>
+      <li><b>Update as the race unfolds</b> — but only the part of the course you
+          haven't sailed yet. The engine advances your boat in (near) real time
+          through actual wind, so the past is locked and <b>routings can never go
+          back in time</b>. No hindsight, no replaying yesterday's shift.</li>
+      <li>Your future routing stays <b>private</b> until sailed; your wake is public,
+          just like a real race tracker.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Races</h2>
+    <table class="list" id="races">
+      <thead><tr>
+        <th>Race</th><th>Start (UTC)</th><th>Status</th><th>Polar</th>
+        <th>Perf</th><th>Virtual</th><th>Real</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <div id="norace" class="muted small" style="display:none;margin-top:8px">
+      No races yet — create one below.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>⚡ Auto-create from the Notice of Race / Sailing Instructions</h2>
+    <p class="small muted" style="margin:4px 0 10px">
+      Drop in the official race documents (PDF or text) and a virtual race is
+      created automatically — name, start time, and course marks are read from
+      the documents, which are attached to the race page for competitors.
+      Marks are only taken from positions stated in the documents, never
+      guessed. AI document reading needs Anthropic credentials on the server;
+      otherwise a pattern parser handles documents with coordinate tables.</p>
+    <label>Documents (NoR, SIs, course appendix — PDF or .txt, multiple OK)</label>
+    <input type="file" id="d_files" multiple accept=".pdf,.txt,.text">
+    <label>…or paste the relevant text (course table, start schedule)</label>
+    <textarea id="d_text" rows="3" placeholder="Optional if files attached"></textarea>
+    <label>Polar (optional — defaults to the generic 40 ft offshore polar)</label>
+    <textarea id="d_polar" rows="3" placeholder="TWA	6	8	10 …"></textarea>
+    <div style="margin-top:12px"><button id="d_go">Read documents &amp; create race</button></div>
+    <div class="msg" id="d_msg"></div>
+    <div id="d_result" style="display:none" class="small">
+      <div id="d_summary"></div>
+      <b>Admin key</b> (save it): <pre id="d_key"></pre>
+      <ul id="d_warn" class="steplist" style="color:var(--accent2)"></ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Create a race</h2>
+    <div class="row">
+      <div>
+        <label>Race name</label>
+        <input id="c_name" placeholder="Round the Island Virtual Challenge">
+      </div>
+      <div>
+        <label>Start time (UTC, ISO)</label>
+        <input id="c_start" placeholder="2026-08-24T14:00:00Z">
+      </div>
+    </div>
+    <label>Description</label>
+    <input id="c_desc" placeholder="optional">
+    <label>Course marks — one per line: <code>name, lat, lon</code> (first = start, last = finish; decimal degrees)</label>
+    <textarea id="c_marks" rows="4" placeholder="Start, 41.4460, -71.3320&#10;Finish, 32.2800, -64.8400"></textarea>
+    <label>Polar — paste the class polar (TWS header row, one row per TWA; the format your routing software exports)</label>
+    <textarea id="c_polar" rows="6" placeholder="TWA	6	8	10	12	14	16	20&#10;40	4.9	5.8	6.4	6.7	6.9	7.0	7.1&#10;..."></textarea>
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>Polar name</label>
+        <input id="c_pname" placeholder="J/122 ORC">
+      </div>
+      <div>
+        <label>Performance factor (0–1)</label>
+        <input id="c_perf" value="0.9">
+      </div>
+      <div>
+        <label>Sim step (minutes)</label>
+        <input id="c_step" value="10">
+      </div>
+      <div>
+        <label>Mark radius (nm)</label>
+        <input id="c_rad" value="2">
+      </div>
+    </div>
+    <div class="row" style="margin-top:4px">
+      <div>
+        <label>Maneuver penalty (seconds per tack/gybe)</label>
+        <input id="c_pen" value="120">
+      </div>
+      <div>
+        <label style="margin-bottom:10px">Ocean currents</label>
+        <label style="display:flex;align-items:center;gap:8px;margin:0">
+          <input type="checkbox" id="c_cur" checked style="width:auto"> boats are set by surface current
+        </label>
+      </div>
+    </div>
+    <div style="margin-top:14px"><button id="c_go">Create race</button></div>
+    <div class="msg" id="c_msg"></div>
+    <div id="c_key" style="display:none" class="small">
+      Race created. <b>Save the admin key</b> (needed to add tracked real boats):
+      <pre id="c_key_val"></pre>
+      <h3>Link the real fleet (YB Tracking)</h3>
+      <p class="muted">If the real race is on yb.tl, enter its slug (the bit after
+      <code>yb.tl/</code>) to import the fleet and let the server poll positions
+      every 10 minutes. Optional filter keeps only boats whose model matches —
+      e.g. <code>J/122</code> to track just your polar's class.</p>
+      <div class="row">
+        <div><label>YB race slug</label><input id="yb_slug" placeholder="fastnet2025"></div>
+        <div><label>Model filter (optional)</label><input id="yb_filter" placeholder="IMOCA"></div>
+      </div>
+      <div style="margin-top:10px"><button id="yb_go" class="ghost">Import real fleet</button></div>
+      <div class="msg" id="yb_msg"></div>
+    </div>
+  </div>
+
+  <div class="card small">
+    <h2>Connecting your navigation software</h2>
+    <h3>Getting the polar in</h3>
+    <p>Each race page offers the polar as a <code>.pol</code> text file
+    (TWA rows × TWS columns) — the format read by Expedition, qtVlm, OpenCPN
+    weather_routing, Adrena and most others. Apply the race performance factor
+    if you want your routing to match the engine exactly.</p>
+    <h3>Getting your routing out</h3>
+    <p>Export the optimal route as <b>GPX</b> (universally supported) or CSV with
+    lat/lon columns, and upload it on the race page. Only the waypoints matter —
+    the engine sails them in order at polar speed through real wind.</p>
+    <h3>Getting your boat back in</h3>
+    <p>Download your sailed track as GPX from the race page and overlay it in your
+    software against the GRIBs to see where your routing won or lost.</p>
+    <h3>Real fleet</h3>
+    <p>Race admins can import tracker positions for the real boats (GPX track or
+    CSV <code>time,lat,lon</code> — e.g. exported from YB/Yellowbrick race viewers)
+    and tag each with a class label, so the leaderboard shows how you stack up
+    against the boats actually sailing your polar.</p>
+  </div>
+</div>
+
+<script>
+async function loadRaces() {
+  const races = await (await fetch('/api/races')).json();
+  const tb = document.querySelector('#races tbody');
+  tb.innerHTML = '';
+  document.getElementById('norace').style.display = races.length ? 'none' : 'block';
+  for (const r of races) {
+    const tr = document.createElement('tr');
+    const st = new Date(r.start_time * 1000).toISOString().slice(0, 16).replace('T', ' ');
+    tr.innerHTML = `<td><a href="/race?id=${r.id}">${esc(r.name)}</a></td>
+      <td>${st}</td>
+      <td>${r.started ? '<span class="badge fin">racing</span>' : '<span class="badge virtual">pre-start</span>'}</td>
+      <td>${esc(r.polar_name)}</td><td>${Math.round(r.perf_factor * 100)}%</td>
+      <td>${r.virtual_boats}</td><td>${r.real_boats}</td>`;
+    tb.appendChild(tr);
+  }
+}
+function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+
+document.getElementById('c_go').onclick = async () => {
+  const msg = document.getElementById('c_msg');
+  msg.className = 'msg';
+  msg.textContent = 'creating…';
+  const marks = document.getElementById('c_marks').value.trim().split('\n')
+    .map(l => l.split(',').map(s => s.trim())).filter(p => p.length >= 3)
+    .map(p => ({ name: p[0], lat: +p[1], lon: +p[2] }));
+  const body = {
+    name: document.getElementById('c_name').value,
+    description: document.getElementById('c_desc').value,
+    start_time: document.getElementById('c_start').value,
+    marks,
+    polar_text: document.getElementById('c_polar').value,
+    polar_name: document.getElementById('c_pname').value || 'race polar',
+    perf_factor: +document.getElementById('c_perf').value || 0.9,
+    step_minutes: +document.getElementById('c_step').value || 10,
+    mark_radius_nm: +document.getElementById('c_rad').value || 2,
+    maneuver_penalty_s: +document.getElementById('c_pen').value || 0,
+    currents_enabled: document.getElementById('c_cur').checked,
+  };
+  try {
+    const res = await fetch('/api/races', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || res.statusText);
+    msg.className = 'msg ok';
+    msg.textContent = 'Race created.';
+    document.getElementById('c_key').style.display = 'block';
+    document.getElementById('c_key_val').textContent = j.admin_key;
+    lastRace = { id: j.id, admin_key: j.admin_key };
+    loadRaces();
+  } catch (e) {
+    msg.className = 'msg err';
+    msg.textContent = e.message;
+  }
+};
+
+document.getElementById('d_go').onclick = async () => {
+  const msg = document.getElementById('d_msg');
+  const files = document.getElementById('d_files').files;
+  const text = document.getElementById('d_text').value.trim();
+  if (!files.length && !text) {
+    msg.className = 'msg err'; msg.textContent = 'attach a document or paste text first';
+    return;
+  }
+  msg.className = 'msg';
+  msg.textContent = 'reading documents… (AI extraction can take a minute)';
+  const fd = new FormData();
+  for (const f of files) fd.append('docs', f);
+  if (text) fd.append('text', text);
+  const polar = document.getElementById('d_polar').value.trim();
+  if (polar) fd.append('polar_text', polar);
+  try {
+    const res = await fetch('/api/races/from_docs', { method: 'POST', body: fd });
+    const j = await res.json();
+    if (res.status === 422 && j.extract) {
+      msg.className = 'msg err';
+      msg.textContent = 'Course could not be extracted — the fields below are prefilled with what was found; add the marks by hand.';
+      if (j.extract.name) document.getElementById('c_name').value = j.extract.name;
+      if (j.extract.start_time_utc) document.getElementById('c_start').value = j.extract.start_time_utc;
+      document.getElementById('c_marks').value =
+        (j.extract.marks || []).map(m => `${m.name}, ${m.lat}, ${m.lon}`).join('\n');
+      return;
+    }
+    if (!res.ok) throw new Error(j.error || res.statusText);
+    msg.className = 'msg ok'; msg.textContent = '';
+    lastRace = { id: j.id, admin_key: j.admin_key };
+    document.getElementById('d_result').style.display = 'block';
+    document.getElementById('d_summary').innerHTML =
+      `Created <a href="/race?id=${j.id}"><b>${esc(j.name || 'race')}</b></a> — ` +
+      `${j.marks} marks, start ${new Date(j.start_time * 1000).toISOString().slice(0, 16).replace('T', ' ')}Z ` +
+      `<span class="muted">(extractor: ${j.extractor})</span>`;
+    document.getElementById('d_key').textContent = j.admin_key;
+    const ul = document.getElementById('d_warn');
+    ul.innerHTML = (j.warnings || []).map(w => `<li>${esc(w)}</li>`).join('');
+    loadRaces();
+  } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+};
+
+let lastRace = null;
+document.getElementById('yb_go').onclick = async () => {
+  const m = document.getElementById('yb_msg');
+  if (!lastRace) return;
+  m.className = 'msg';
+  m.textContent = 'importing fleet + track history… (can take a minute for big races)';
+  try {
+    const res = await fetch(`/api/races/${lastRace.id}/yb`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ admin_key: lastRace.admin_key,
+        slug: document.getElementById('yb_slug').value,
+        model_filter: document.getElementById('yb_filter').value }) });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || res.statusText);
+    m.className = 'msg ok';
+    m.textContent = `Linked "${j.race}" — ${j.teams} boats, ${j.positions} positions imported. Polling every 10 min.`;
+    loadRaces();
+  } catch (e) { m.className = 'msg err'; m.textContent = e.message; }
+};
+loadRaces();
+</script>
+</body>
+</html>

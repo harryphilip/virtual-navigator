@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Race — Virtual Navigator</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="site">
+  <div class="logo"><a href="/" style="color:inherit">Virtual <span class="wave">~</span> Navigator</a></div>
+  <div class="sub" id="r_name">loading…</div>
+  <div class="right"><span id="r_clock" class="clock"></span></div>
+</header>
+
+<div class="race-grid">
+  <div id="map"></div>
+  <div class="side">
+
+    <div class="card">
+      <h2 style="display:flex;align-items:center;gap:8px">Leaderboard
+        <span class="muted small" id="lb_meta" style="font-weight:400"></span></h2>
+      <div class="lb-filters" id="lb_filters"></div>
+      <div class="lb-scroll">
+        <table class="list" id="lb">
+          <thead><tr><th>#</th><th>Boat</th><th></th><th>DTF&nbsp;nm</th><th>kn</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="docs_card" style="display:none">
+      <h2>Race documents</h2>
+      <div id="docs_list" class="small"></div>
+    </div>
+
+    <div class="card">
+      <h2>On-board forecasts</h2>
+      <p class="small muted" style="margin:2px 0 8px">
+        The wind files the fleet is sailing on — snapshotted every 6 h from the
+        same model that drives the boats. Load them into your routing software
+        (GRIB-1, 10 m wind); the archive is the honest record of what was
+        knowable when.</p>
+      <div id="fx_list" class="small muted">no snapshots yet</div>
+    </div>
+
+    <div class="card" id="myboat">
+      <h2>My boat</h2>
+      <div id="mb_register">
+        <div class="row">
+          <div><label>Boat name</label><input id="mb_name"></div>
+          <div><label>PIN (keep it!)</label><input id="mb_pin" type="password"></div>
+        </div>
+        <div style="margin-top:10px" class="row">
+          <button id="mb_reg_go">Register new boat</button>
+          <button class="ghost" id="mb_login_go">Sign in to existing</button>
+        </div>
+        <div id="mb_login" style="display:none;margin-top:8px">
+          <label>Boat ID</label><input id="mb_id" placeholder="numeric id">
+        </div>
+        <div class="msg" id="mb_msg"></div>
+      </div>
+
+      <div id="mb_manage" style="display:none">
+        <div class="small" id="mb_status"></div>
+        <div class="msg" id="mb_msg2"></div>
+
+        <h3>Submit / update routing</h3>
+        <p class="small muted" style="margin:2px 0 8px">
+          Replaces only the part of your route you haven't sailed yet. Your boat
+          keeps sailing the old plan until you submit. Future waypoints are
+          private to you.</p>
+        <div class="row">
+          <button id="mb_draw">✏️ Draw on map</button>
+          <button class="ghost" id="mb_file_btn">Upload GPX / CSV</button>
+          <input type="file" id="mb_file" accept=".gpx,.csv,.txt,.xml" style="display:none">
+        </div>
+        <div id="mb_draw_ui" style="display:none;margin-top:8px" class="small">
+          <span class="muted">Click the chart to add waypoints —</span>
+          <span id="mb_wp_n">0 waypoints</span>
+          <div class="row" style="margin-top:6px">
+            <button class="ghost" id="mb_undo">Undo</button>
+            <button class="ghost" id="mb_clear">Clear</button>
+            <button id="mb_submit">Submit routing</button>
+          </div>
+        </div>
+        <h3>Tools</h3>
+        <div class="small">
+          <a id="mb_polar" href="#">⬇ race polar (.pol)</a> ·
+          <a id="mb_gpx" href="#">⬇ my track (.gpx)</a> ·
+          <a href="#" id="mb_logout">sign out</a>
+        </div>
+        <div class="small muted" id="mb_subs" style="margin-top:6px"></div>
+      </div>
+    </div>
+
+    <div class="card small muted">
+      <b style="color:var(--text)">House rules.</b> One polar for the whole fleet,
+      scaled to <span id="r_perf"></span> of polar targets. The engine sails your
+      waypoints through real surface wind <span id="r_cur"></span>, stepping
+      <span id="r_step"></span> — it never rewinds, so what's sailed is sailed.
+      Every tack or gybe costs <span id="r_pen"></span>, so a wiggly routing is a
+      slow routing. Route with the forecasts you'd have on board; the ocean
+      grades your homework in real time.
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const raceId = +new URLSearchParams(location.search).get('id');
+const store = {
+  get k() { return 'vn_race_' + raceId; },
+  load() { try { return JSON.parse(localStorage.getItem(this.k)) || null; } catch { return null; } },
+  save(v) { localStorage.setItem(this.k, JSON.stringify(v)); },
+  clear() { localStorage.removeItem(this.k); },
+};
+let race = null, state = null, my = store.load();
+let filter = 'all';
+let drawMode = false, drawWps = [];
+
+const map = L.map('map', { worldCopyJump: true }).setView([38, -60], 5);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors', maxZoom: 12, className: 'dark-tiles',
+}).addTo(map);
+const courseLayer = L.layerGroup().addTo(map);
+const fleetLayer = L.layerGroup().addTo(map);
+const planLayer = L.layerGroup().addTo(map);
+const drawLayer = L.layerGroup().addTo(map);
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+function fmt1(x) { return x == null ? '—' : (Math.round(x * 10) / 10).toFixed(1); }
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || res.statusText);
+  return j;
+}
+
+async function loadRace() {
+  race = await api('/api/races/' + raceId);
+  document.getElementById('r_name').textContent = race.name;
+  document.title = race.name + ' — Virtual Navigator';
+  document.getElementById('r_perf').textContent = Math.round(race.perf_factor * 100) + '%';
+  document.getElementById('r_step').textContent = 'every ' + race.step_minutes + ' min';
+  document.getElementById('r_cur').textContent =
+    race.currents_enabled ? 'and ocean current' : '(currents off)';
+  document.getElementById('r_pen').textContent =
+    Math.round(race.maneuver_penalty_s) + ' s';
+  loadForecasts();
+  loadDocs();
+  courseLayer.clearLayers();
+  const pts = race.marks.map(m => [m.lat, m.lon]);
+  L.polyline(pts, { color: '#8aa7bc', weight: 1.5, dashArray: '6 6', opacity: .8 }).addTo(courseLayer);
+  race.marks.forEach((m, i) => {
+    L.circleMarker([m.lat, m.lon], {
+      radius: 6, color: '#ffb84d', weight: 2, fillColor: '#ffb84d', fillOpacity: .35,
+    }).addTo(courseLayer).bindTooltip(
+      `${i === 0 ? '⚑ ' : i === race.marks.length - 1 ? '🏁 ' : ''}${esc(m.name)}`,
+      { className: 'boat-label', permanent: false });
+  });
+  courseBounds = L.latLngBounds(pts).pad(0.25);
+  fitCourse();
+}
+let courseBounds = null;
+function fitCourse() {
+  // the map div can measure 0x0 if Leaflet initialised before layout settled
+  map.invalidateSize();
+  if (courseBounds) map.fitBounds(courseBounds);
+}
+// the pane can lay out (and resize) well after load; keep the course framed
+// until the user takes over the chart themselves
+let userMoved = false;
+['mousedown', 'wheel', 'touchstart'].forEach(ev =>
+  document.getElementById('map').addEventListener(ev, () => { userMoved = true; }, { passive: true }));
+new ResizeObserver(() => {
+  map.invalidateSize();
+  if (!userMoved) fitCourse();
+}).observe(document.getElementById('map'));
+
+const palette = ['#35c4dc', '#5dd39e', '#c792ea', '#82aaff', '#f78c6c', '#eadd6f', '#ff9ecb', '#7fdbca'];
+function colorFor(e, i) { return e.type === 'real' ? '#ffb84d' : palette[i % palette.length]; }
+
+async function refresh() {
+  state = await api(`/api/races/${raceId}/state`);
+  drawFleet();
+  drawLeaderboard();
+  if (my) refreshMine().catch(() => {});
+}
+
+function drawFleet() {
+  fleetLayer.clearLayers();
+  state.entries.forEach((e, i) => {
+    if (!visible(e)) return;
+    const c = colorFor(e, i);
+    if (e.track && e.track.length > 1)
+      L.polyline(e.track, { color: c, weight: 1.4, opacity: .7 }).addTo(fleetLayer);
+    if (e.lat != null) {
+      const mk = e.type === 'real'
+        ? L.marker([e.lat, e.lon], { icon: L.divIcon({ className: '', html:
+            `<div style="width:11px;height:11px;background:${c};transform:rotate(45deg);border:1.5px solid #0b1620"></div>`,
+            iconSize: [11, 11], iconAnchor: [5, 5] }) })
+        : L.circleMarker([e.lat, e.lon], { radius: 5.5, color: '#0b1620', weight: 1.5, fillColor: c, fillOpacity: 1 });
+      mk.addTo(fleetLayer).bindTooltip(
+        `${esc(e.name)} · ${fmt1(e.sog)} kn · ${Math.round(e.dtf)} nm to go`,
+        { className: 'boat-label', direction: 'top', offset: [0, -8] });
+    }
+  });
+}
+
+function visible(e) {
+  if (filter === 'all') return true;
+  if (filter === 'virtual' || filter === 'real') return e.type === filter;
+  return e.klass === filter;
+}
+
+async function loadDocs() {
+  try {
+    const docs = await api(`/api/races/${raceId}/docs`);
+    if (!docs.length) return;
+    document.getElementById('docs_card').style.display = 'block';
+    const label = { nor: 'Notice of Race', si: 'Sailing Instructions',
+                    amendment: 'Amendment', doc: 'Document' };
+    document.getElementById('docs_list').innerHTML = docs.map(d =>
+      `<div>📄 <a href="/api/docs/${d.id}">${esc(d.filename)}</a>` +
+      ` <span class="muted">· ${label[d.kind] || d.kind} · ${Math.round(d.size / 1024)} kB</span></div>`
+    ).join('');
+  } catch (e) { /* card stays hidden */ }
+}
+
+async function loadForecasts() {
+  try {
+    const fx = await api(`/api/races/${raceId}/forecasts`);
+    const div = document.getElementById('fx_list');
+    if (!fx.length) { div.textContent = 'no snapshots yet — the first arrives within a minute of the server ticking'; return; }
+    div.classList.remove('muted');
+    div.innerHTML = fx.slice(0, 8).map(f => {
+      const d = new Date(f.issued_at * 1000).toISOString().slice(5, 16).replace('T', ' ');
+      return `<div>⬇ <a href="/api/forecasts/${f.id}.grb">${d}z</a>` +
+        ` <span class="muted">· +${(f.hours - 1) * 3}h · ${f.step}° grid · ${Math.round(f.bytes / 1024)} kB</span></div>`;
+    }).join('');
+  } catch (e) { /* leave placeholder */ }
+}
+
+function drawLeaderboard() {
+  const counts = {};
+  state.entries.forEach(e => {
+    if (e.type === 'real' && e.klass) counts[e.klass] = (counts[e.klass] || 0) + 1;
+  });
+  const classes = Object.keys(counts)
+    .sort((a, b) => counts[b] - counts[a]).slice(0, 6);
+  const fdiv = document.getElementById('lb_filters');
+  const opts = [['all', 'All'], ['virtual', 'Virtual fleet'], ['real', 'Real fleet'],
+    ...classes.map(c => [c, 'Class: ' + c])];
+  fdiv.innerHTML = '';
+  for (const [val, lab] of opts) {
+    const b = document.createElement('button');
+    b.textContent = lab;
+    b.className = filter === val ? 'on' : '';
+    b.onclick = () => { filter = val; drawLeaderboard(); drawFleet(); };
+    fdiv.appendChild(b);
+  }
+  const tb = document.querySelector('#lb tbody');
+  tb.innerHTML = '';
+  let shown = 0;
+  state.entries.forEach((e) => {
+    if (!visible(e)) return;
+    shown++;
+    const tr = document.createElement('tr');
+    const mine = my && e.type === 'virtual' && e.id === my.boatId;
+    const badge = e.finished_at
+      ? '<span class="badge fin">finished</span>'
+      : !e.started ? '<span class="badge">—</span>'
+      : e.type === 'real' ? `<span class="badge real">${esc(e.klass)}</span>`
+      : '<span class="badge virtual">virtual</span>';
+    tr.innerHTML = `<td>${e.rank}</td>
+      <td ${mine ? 'style="color:var(--accent);font-weight:650"' : ''}>${esc(e.name)}${mine ? ' ◂' : ''}</td>
+      <td>${badge}</td><td>${e.finished_at ? '0' : Math.round(e.dtf)}</td><td>${fmt1(e.sog)}</td>`;
+    tb.appendChild(tr);
+  });
+  document.getElementById('lb_meta').textContent =
+    `${shown} boats · course ${Math.round(state.course_len_nm)} nm`;
+}
+
+/* ---------------- my boat ---------------- */
+function showManage() {
+  document.getElementById('mb_register').style.display = my ? 'none' : 'block';
+  document.getElementById('mb_manage').style.display = my ? 'block' : 'none';
+  if (my) {
+    document.getElementById('mb_polar').href = `/api/races/${raceId}/polar`;
+    document.getElementById('mb_gpx').href = `/api/boats/${my.boatId}/track.gpx`;
+  }
+}
+
+async function refreshMine() {
+  if (!my) return;
+  const b = await api(`/api/boats/${my.boatId}?pin=${encodeURIComponent(my.pin)}`);
+  const st = document.getElementById('mb_status');
+  const when = t => new Date(t * 1000).toISOString().slice(5, 16).replace('T', ' ');
+  if (b.finished_at) {
+    st.innerHTML = `<b>${esc(b.name)}</b> — 🏁 finished at ${when(b.finished_at)} UTC`;
+  } else if (b.sim_time == null) {
+    st.innerHTML = `<b>${esc(b.name)}</b> — no routing yet. Submit one to leave the dock.`;
+  } else {
+    st.innerHTML = `<b>${esc(b.name)}</b> — ${b.dtf == null ? '' : Math.round(b.dtf) + ' nm to go · '}` +
+      `${b.maneuvers} tacks/gybes · sailed through ${when(b.sim_time)} UTC (locked)`;
+  }
+  planLayer.clearLayers();
+  if (b.route.length && b.lat != null) {
+    L.polyline([[b.lat, b.lon], ...b.route],
+      { color: '#35c4dc', weight: 2, dashArray: '3 6', opacity: .9 }).addTo(planLayer);
+    b.route.forEach(w => L.circleMarker(w, { radius: 3, color: '#35c4dc', fillOpacity: 1 })
+      .addTo(planLayer));
+  } else if (b.route.length) {
+    L.polyline(b.route, { color: '#35c4dc', weight: 2, dashArray: '3 6', opacity: .9 }).addTo(planLayer);
+  }
+  document.getElementById('mb_subs').textContent = b.submissions.length
+    ? 'Routing submissions: ' + b.submissions.map(s => `${when(s.at)} (${s.n} wps)`).slice(0, 5).join(' · ')
+    : '';
+}
+
+document.getElementById('mb_reg_go').onclick = async () => {
+  const msg = document.getElementById('mb_msg');
+  try {
+    const name = document.getElementById('mb_name').value.trim();
+    const pin = document.getElementById('mb_pin').value;
+    const j = await api(`/api/races/${raceId}/boats`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, pin }) });
+    my = { boatId: j.boat_id, pin, name };
+    store.save(my);
+    msg.className = 'msg ok'; msg.textContent = '';
+    showManage(); refreshMine();
+  } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+};
+document.getElementById('mb_login_go').onclick = async () => {
+  const loginDiv = document.getElementById('mb_login');
+  if (loginDiv.style.display === 'none') { loginDiv.style.display = 'block'; return; }
+  const msg = document.getElementById('mb_msg');
+  try {
+    const id = +document.getElementById('mb_id').value;
+    const pin = document.getElementById('mb_pin').value;
+    const b = await api(`/api/boats/${id}?pin=${encodeURIComponent(pin)}`);
+    my = { boatId: id, pin, name: b.name };
+    store.save(my);
+    showManage(); refreshMine();
+  } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+};
+document.getElementById('mb_logout').onclick = (ev) => {
+  ev.preventDefault(); store.clear(); my = null; planLayer.clearLayers(); showManage();
+};
+
+/* route drawing */
+const msg2 = document.getElementById('mb_msg2');
+function setMsg2(text, ok) { msg2.className = 'msg ' + (ok ? 'ok' : 'err'); msg2.textContent = text; }
+
+document.getElementById('mb_draw').onclick = () => {
+  drawMode = !drawMode;
+  document.getElementById('mb_draw_ui').style.display = drawMode ? 'block' : 'none';
+  document.getElementById('mb_draw').textContent = drawMode ? '✏️ Drawing… (click chart)' : '✏️ Draw on map';
+  if (!drawMode) { drawWps = []; drawLayer.clearLayers(); updateDrawUi(); }
+};
+map.on('click', (ev) => {
+  if (!drawMode || !my) return;
+  drawWps.push([+ev.latlng.lat.toFixed(5), +ev.latlng.lng.toFixed(5)]);
+  updateDrawUi();
+});
+function updateDrawUi() {
+  document.getElementById('mb_wp_n').textContent = drawWps.length + ' waypoints';
+  drawLayer.clearLayers();
+  if (drawWps.length) {
+    L.polyline(drawWps, { color: '#eadd6f', weight: 2 }).addTo(drawLayer);
+    drawWps.forEach(w => L.circleMarker(w, { radius: 3.5, color: '#eadd6f', fillOpacity: 1 }).addTo(drawLayer));
+  }
+}
+document.getElementById('mb_undo').onclick = () => { drawWps.pop(); updateDrawUi(); };
+document.getElementById('mb_clear').onclick = () => { drawWps = []; updateDrawUi(); };
+document.getElementById('mb_submit').onclick = async () => {
+  if (!drawWps.length) return setMsg2('add at least one waypoint', false);
+  await submitRoute({ waypoints: drawWps });
+};
+document.getElementById('mb_file_btn').onclick = () => document.getElementById('mb_file').click();
+document.getElementById('mb_file').onchange = async (ev) => {
+  const f = ev.target.files[0];
+  if (!f) return;
+  const text = await f.text();
+  await submitRoute({ gpx: text });
+  ev.target.value = '';
+};
+async function submitRoute(payload) {
+  try {
+    const j = await api(`/api/boats/${my.boatId}/route`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: my.pin, ...payload }) });
+    setMsg2(`Routing accepted — ${j.waypoints} waypoints ahead of you.`, true);
+    drawWps = []; drawLayer.clearLayers(); updateDrawUi();
+    if (drawMode) document.getElementById('mb_draw').click();
+    await refresh();
+  } catch (e) { setMsg2(e.message, false); }
+}
+
+/* clock */
+setInterval(() => {
+  if (!race) return;
+  const now = Date.now() / 1000, d = now - race.start_time;
+  const el = document.getElementById('r_clock');
+  const a = Math.abs(d), h = Math.floor(a / 3600), m = Math.floor((a % 3600) / 60), s = Math.floor(a % 60);
+  const pad = n => String(n).padStart(2, '0');
+  el.textContent = (d < 0 ? 'starts in ' : 'elapsed ') + `${h}:${pad(m)}:${pad(s)}`;
+}, 1000);
+
+(async function init() {
+  await loadRace();
+  showManage();
+  await refresh();
+  setInterval(refresh, 60000);
+})().catch(e => { document.getElementById('r_name').textContent = 'error: ' + e.message; });
+</script>
+</body>
+</html>

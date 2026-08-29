@@ -1,0 +1,3 @@
+flask>=3.0
+anthropic>=1.0     # AI reading of NoR/SI documents (optional at runtime)
+pypdf>=5.0         # PDF text extraction for the offline fallback parser

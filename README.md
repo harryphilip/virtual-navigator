@@ -1,0 +1,143 @@
+# Virtual Navigator
+
+Fantasy offshore racing: pick a race, register a virtual boat, and submit a
+weather routing produced in your own navigation software. Every virtual boat
+sails the **same polar** through the **same real weather**, and the leaderboard
+ranks the armchair fleet alongside the **real boats on the tracker** — like
+fantasy baseball, but your lineup is a set of waypoints.
+
+## Quick start
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python scripts/seed_demo.py   # optional: demo race + fleet
+.venv/bin/python app.py                 # → http://127.0.0.1:5170
+```
+
+The demo seeds a Newport→Bermuda challenge that started 36 h ago, simulated
+through real historical wind. Demo boats use PIN `0000`; the demo admin key is
+`demo-admin`.
+
+## How the game works
+
+- **One polar per race.** The race admin uploads the class polar (standard
+  text format: TWS header row, one row per TWA — what Expedition, qtVlm,
+  Adrena, ORC etc. read and write). A **performance factor** (default 90 %)
+  derates it to realistic sailed performance. Competitors download the exact
+  polar from the race page.
+- **You submit a routing, the ocean sails it.** The engine advances each boat
+  every `step_minutes` through real 10 m wind (Open-Meteo, cached on a 0.25°
+  grid; a deterministic synthetic field fills in if offline). At each step the
+  boat steers whatever heading maximises speed made good toward the next
+  waypoint — so an upwind waypoint costs realistic tacking VMG — and boat speed
+  comes from the shared polar. A background ticker advances every active race
+  once a minute, so the fleet keeps sailing while nobody is watching.
+- **Maneuvers cost time.** The boat holds its tack until the other tack is
+  clearly faster; every tack or gybe then costs `maneuver_penalty_s` seconds
+  (default 120) of stopped time. Wiggly routings are slow routings; the tack
+  count shows in your boat panel.
+- **Currents set the fleet.** Real surface currents (Open-Meteo marine model,
+  same 0.25° caching) push every boat — sailing or parked — so a Gulf Stream
+  lane or a foul tide gate matters exactly like it does offshore. Optional
+  per race (`currents_enabled`).
+- **No time travel.** Boat state only ever advances. When you update your
+  routing, the server first simulates your boat up to *now* under the old
+  plan; everything sailed is locked, and only not-yet-reached waypoints are
+  replaced. Late entries start at the line at submission time, never
+  backdated. Every submission is timestamped in an audit log.
+- **On-board information only.** The engine evaluates with *actual* wind in
+  near-real time, so nobody — server included — knows the future. You plan
+  with the same forecasts you'd carry on board; hindsight can't help you
+  because the past is already sailed.
+- **Private plans, public wakes.** Your future waypoints are visible only
+  with your PIN. Your sailed track is public, like any race tracker.
+- **On-board forecast archive.** Every 6 h the ticker snapshots the wind
+  forecast over the race area — from the same model that will sail the boats —
+  and stores it as a real **GRIB-1 file** (10 m U/V wind, 0–120 h, validated
+  against an independent GRIB reader). Download it from the race page into
+  qtVlm / Expedition / XyGrib and route with exactly what was knowable at the
+  time; the archive is the honest record for post-race arguments.
+- **Combined leaderboard.** Virtual boats and imported real boats are ranked
+  together by distance-to-finish along the course (finish order once home).
+  Real boats carry a class label, with one-click filters such as
+  *Class: Same polar (40ft)* to compare yourself against the boats actually
+  sailing your polar.
+- **Live YB Tracking link.** Give a race the slug of a yb.tl tracker
+  (optionally filtered to one class, e.g. `model_filter: "IMOCA"`) and the
+  server imports the fleet roster + full track history, then polls for new
+  positions every 10 minutes. Mark roundings, finishes and SOG are derived
+  from the real tracks. (Verified against the Rolex Fastnet 2025 feed —
+  the decoder speaks YB's binary AllPositions3/LatestPositions3 format.)
+
+## Auto-creating a race from the Notice of Race / SIs
+
+Upload the official race documents (PDF or text) on the home page and a
+virtual race is created automatically: name, start time (converted to UTC),
+and the course marks are read from the documents, which are attached to the
+race page for competitors. Two extractors:
+
+- **Claude** (used when the server has Anthropic credentials — set
+  `ANTHROPIC_API_KEY`, or sign in with `ant auth login`): the PDFs are read
+  by `claude-opus-5` with a structured-output schema; it handles prose
+  course descriptions, start schedules, mark tables and local time zones.
+- **Built-in pattern parser** (offline fallback): reads coordinate tables in
+  standard nav formats (`41° 27.20' N 071° 21.40' W` or decimal degrees) and
+  start dates near the words "warning signal"/"first start".
+
+Neither extractor invents positions — marks come out only if the documents
+state them; if fewer than two marks are found the response returns the
+partial extraction and the web form is prefilled for manual completion.
+Admins can attach amendments later (`POST /api/races/<id>/docs`), and every
+document is downloadable from the race page.
+
+## Integrating with navigation software
+
+The integration surface is deliberately universal:
+
+| Direction | Format | Works with |
+|---|---|---|
+| Race polar → your software | `.pol` text (TWA rows × TWS columns), from the race page | Expedition, Adrena, qtVlm, TimeZero, LuckGrib, OpenCPN weather_routing, PredictWind |
+| Your routing → the game | GPX route/track, or CSV with lat/lon columns (decimal or `41 27.5 N` style) | anything that exports GPX/CSV |
+| Your sailed track → your software | GPX track download per boat | anything that imports GPX |
+| Real fleet → the game | GPX track or CSV `time,lat,lon` per boat (admin import) | YB/Yellowbrick viewer exports, expedition logs, AIS dumps |
+
+## API sketch
+
+```
+GET  /api/races                      list races
+POST /api/races                      create (returns admin_key)
+GET  /api/races/<id>                 course + settings
+GET  /api/races/<id>/polar           the polar file
+GET  /api/races/<id>/state           leaderboard + fleet positions (advances the sim)
+POST /api/races/<id>/boats           register a virtual boat {name, pin}
+POST /api/boats/<id>/route           submit/update routing {pin, waypoints|gpx|csv}
+GET  /api/boats/<id>?pin=…           owner view incl. private future route
+GET  /api/boats/<id>/track.gpx       sailed track export
+POST /api/races/<id>/real_boats      add tracked real boat {admin_key, name, klass}
+POST /api/real_boats/<id>/track      import tracker positions {admin_key, text}
+POST /api/races/from_docs            auto-create a race from NoR/SI uploads
+POST /api/races/<id>/docs            attach more documents (admin)
+GET  /api/races/<id>/docs            list race documents
+GET  /api/docs/<id>                  download a document
+POST /api/races/<id>/yb              link a yb.tl race {admin_key, slug, model_filter?}
+GET  /api/races/<id>/forecasts       list on-board forecast snapshots
+GET  /api/forecasts/<id>.grb         download one snapshot as GRIB-1
+```
+
+## Design notes & simplifications
+
+- A background ticker advances every race in its active window (start − 48 h
+  to start + 60 d) once a minute; state requests also catch up on demand, so
+  the sim is correct even after a server restart.
+- Boats hold the rhumb line to their next waypoint and "tack in place" at
+  best VMC rather than sailing explicit zig-zags; a 3 % hysteresis keeps them
+  from flip-flopping tacks, and each real tack/gybe costs the race's
+  maneuver penalty.
+- No land avoidance: routes crossing land will happily sail it, so route
+  around headlands like you would offshore. Course marks are honoured within
+  `mark_radius_nm`.
+- Wind + surface current only (no waves or sail inventory limits) — the polar
+  factor stands in for real-world degradation.
+- Storage is SQLite (`data/vn.sqlite`), server is Flask; suitable for a club
+  fleet, not the Vendée Globe's player count.
