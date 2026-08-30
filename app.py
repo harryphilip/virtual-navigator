@@ -970,7 +970,7 @@ def _tick():
     db = get_db()
     now = int(time.time())
     for r in db.execute("SELECT * FROM races").fetchall():
-        if now < r["start_time"] - 48 * 3600 or now > r["start_time"] + 60 * 86400:
+        if now < r["start_time"] - 72 * 3600 or now > r["start_time"] + 60 * 86400:
             continue                                   # far from race window
         catch_up_race(db, r["id"], now)
 

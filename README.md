@@ -168,7 +168,7 @@ GET  /api/forecasts/<id>.grb         download one snapshot as GRIB-1
 
 ## Design notes & simplifications
 
-- A background ticker advances every race in its active window (start − 48 h
+- A background ticker advances every race in its active window (start − 72 h
   to start + 60 d) once a minute; state requests also catch up on demand, so
   the sim is correct even after a server restart.
 - Boats hold the rhumb line to their next waypoint and "tack in place" at
