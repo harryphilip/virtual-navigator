@@ -151,6 +151,22 @@ def _parse_iso(s):
     return int(d.timestamp())
 
 
+def route_to_gpx(name, marks, desc=""):
+    """marks: [{'name','lat','lon'}] -> a GPX 1.1 <rte> that Expedition,
+    qtVlm, TimeZero, OpenCPN etc. import directly as a route."""
+    def esc(s):
+        return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
+    pts = "\n".join(
+        f'    <rtept lat="{m["lat"]:.6f}" lon="{m["lon"]:.6f}">'
+        f'<name>{esc(m["name"])}</name></rtept>'
+        for m in marks)
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<gpx version="1.1" creator="Virtual Navigator" '
+            'xmlns="http://www.topografix.com/GPX/1/1">\n'
+            f'  <metadata><name>{esc(name)}</name><desc>{esc(desc)}</desc></metadata>\n'
+            f'  <rte>\n    <name>{esc(name)}</name>\n{pts}\n  </rte>\n</gpx>\n')
+
+
 def track_to_gpx(name, points):
     """points: [(t, lat, lon)] -> GPX 1.1 text for import into nav software."""
     esc = name.replace("&", "&amp;").replace("<", "&lt;")

@@ -28,6 +28,10 @@
           <tbody></tbody>
         </table>
       </div>
+      <div class="small" style="margin-top:10px">
+        <a id="dl_course" href="#" title="the official marks as a GPX route — import into your nav software and route between them">⬇ course route (.gpx)</a> ·
+        <a id="dl_polar" href="#">⬇ race polar (.pol)</a>
+      </div>
     </div>
 
     <div class="card" id="docs_card" style="display:none">
@@ -104,6 +108,7 @@
         </div>
         <h3>Tools</h3>
         <div class="small">
+          <a id="mb_course" href="#">⬇ course route (.gpx)</a> ·
           <a id="mb_polar" href="#">⬇ race polar (.pol)</a> ·
           <a id="mb_gpx" href="#">⬇ my track (.gpx)</a> ·
           <a id="mb_posgpx" href="#" title="one-waypoint GPX: import as the departure point for your next routing run">⬇ position (.gpx)</a> ·
@@ -218,6 +223,8 @@ async function loadRace() {
     Math.round(race.maneuver_penalty_s) + ' s';
   document.getElementById('r_depth').textContent =
     Math.round(race.grounding_depth_ft ?? 15) + ' ft';
+  document.getElementById('dl_course').href = `/api/races/${raceId}/course.gpx`;
+  document.getElementById('dl_polar').href = `/api/races/${raceId}/polar`;
   loadForecasts();
   loadDocs();
   const pts = race.marks.map(m => [m.lat, m.lon]);
@@ -381,6 +388,7 @@ async function showManage() {
   document.getElementById('mb_register').style.display = (me && !my) ? 'block' : 'none';
   document.getElementById('mb_manage').style.display = (me && my) ? 'block' : 'none';
   if (my) {
+    document.getElementById('mb_course').href = `/api/races/${raceId}/course.gpx`;
     document.getElementById('mb_polar').href = `/api/races/${raceId}/polar`;
     document.getElementById('mb_gpx').href = `/api/boats/${my.boatId}/track.gpx`;
     document.getElementById('mb_posgpx').href = `/api/boats/${my.boatId}/position.gpx`;

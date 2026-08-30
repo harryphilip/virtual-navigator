@@ -19,7 +19,7 @@ from vn import yb
 from vn.db import get_db
 from vn.forecast import make_snapshot
 from vn.nor import extract_race, MAX_DOC_BYTES
-from vn.gpx import parse_coord, parse_route, parse_track, track_to_gpx
+from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to_gpx
 from vn.polar import Polar
 from vn.realfleet import ingest_points, recompute
 from vn.sim import catch_up_race, dtf_nm, enforce_course, get_marks, race_polar
@@ -323,6 +323,26 @@ def race_polar_text(race_id):
     return Response(r["polar_text"], mimetype="text/plain",
                     headers={"Content-Disposition":
                              f'attachment; filename="race{race_id}_polar.pol"'})
+
+
+@app.get("/api/races/<int:race_id>/course.gpx")
+def race_course_gpx(race_id):
+    """The race course as a GPX route — the starting point for your first
+    routing run: import it, route between the marks, export, upload."""
+    db = get_db()
+    r = _race_or_404(db, race_id)
+    if not r:
+        return _err("race not found", 404)
+    marks = [dict(m) for m in get_marks(db, race_id)]
+    stamp = dt.datetime.fromtimestamp(r["start_time"], dt.timezone.utc)
+    gpx = route_to_gpx(
+        r["name"], marks,
+        desc=f"Start {stamp.strftime('%Y-%m-%d %H:%M UTC')} — course marks in "
+             f"sailing order; pass within {r['mark_radius_nm']} nm of each.")
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "_", r["name"])[:40]
+    return Response(gpx, mimetype="application/gpx+xml",
+                    headers={"Content-Disposition":
+                             f'attachment; filename="{safe}_course.gpx"'})
 
 
 @app.get("/api/races/<int:race_id>/state")
