@@ -1,0 +1,17 @@
+{
+  "name": "The Ocean Race Atlantic 2026 — Virtual",
+  "description": "Fantasy edition of The Ocean Race Atlantic: New York to Lorient, ~3,200 nm across the North Atlantic, first 50/50 gender-parity fully-crewed transatlantic race, sailed by the IMOCA fleet. Virtual start 20:00 UTC 1 Sep at the offshore start area (~100 nm SE of New York; the real fleet docks out at noon local and starts offshore). Polar: legacy (non-foiling) IMOCA 60 at 95% — the real foilers will be faster; the virtual fleet all sails the same numbers. Route yourself across: great circle vs. ridge-dodging is the whole game.",
+  "start_time": "2026-09-01T20:00:00Z",
+  "polar_name": "IMOCA 60 (meltemus, non-foiling)",
+  "polar_file": "../polar_imoca60.pol",
+  "perf_factor": 0.95,
+  "step_minutes": 10,
+  "mark_radius_nm": 3.0,
+  "maneuver_penalty_s": 90,
+  "currents_enabled": true,
+  "grounding_depth_ft": 15,
+  "marks": [
+    {"name": "Start — offshore New York", "lat": 40.10, "lon": -71.70},
+    {"name": "Finish — Lorient approach", "lat": 47.70, "lon": -3.37}
+  ]
+}
