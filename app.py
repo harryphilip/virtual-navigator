@@ -6,12 +6,14 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import secrets
 import threading
 import time
 import traceback
 
 from flask import Flask, jsonify, request, send_from_directory, Response
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from vn import yb
 from vn.db import get_db
@@ -23,14 +25,49 @@ from vn.realfleet import ingest_points, recompute
 from vn.sim import catch_up_race, dtf_nm, enforce_course, get_marks, race_polar
 
 app = Flask(__name__, static_folder="public", static_url_path="")
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)   # Fly's TLS proxy
 
 TRACK_MAX_POINTS = 400
+SESSION_COOKIE = "vn_session"
+SESSION_DAYS = 90
 
 
 # ---------- helpers ---------------------------------------------------------
 
 def _hash_pin(pin):
+    """Legacy PIN hash — kept only so pre-account boats can be claimed."""
     return hashlib.sha256(("vn-salt:" + pin).encode()).hexdigest()
+
+
+def _hash_pw(password, salt_hex):
+    return hashlib.pbkdf2_hmac("sha256", password.encode(),
+                               bytes.fromhex(salt_hex), 200_000).hex()
+
+
+def current_user(db):
+    tok = request.cookies.get(SESSION_COOKIE)
+    if not tok:
+        return None
+    return db.execute(
+        "SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id "
+        "WHERE s.token=? AND s.expires_at>?", (tok, int(time.time()))).fetchone()
+
+
+def _start_session(resp, db, user_id):
+    tok = secrets.token_hex(32)
+    now = int(time.time())
+    db.execute("INSERT INTO sessions(token,user_id,created_at,expires_at) "
+               "VALUES (?,?,?,?)", (tok, user_id, now, now + SESSION_DAYS * 86400))
+    db.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
+    db.commit()
+    resp.set_cookie(SESSION_COOKIE, tok, max_age=SESSION_DAYS * 86400,
+                    httponly=True, samesite="Lax", secure=request.is_secure)
+    return resp
+
+
+def _user_json(u):
+    return {"username": u["username"], "display_name": u["display_name"] or u["username"],
+            "is_admin": bool(u["is_admin"])}
 
 
 def _err(msg, code=400):
@@ -71,6 +108,127 @@ def race_page():
     return send_from_directory("public", "race.html")
 
 
+@app.get("/user")
+def user_page():
+    return send_from_directory("public", "user.html")
+
+
+# ---------- accounts ---------------------------------------------------------
+
+@app.post("/api/auth/register")
+def auth_register():
+    db = get_db()
+    d = request.get_json(force=True)
+    username = (d.get("username") or "").strip().lower()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{2,29}", username):
+        return _err("username: 3-30 chars, letters/digits/dash/underscore")
+    password = d.get("password") or ""
+    if len(password) < 6:
+        return _err("password must be at least 6 characters")
+    salt = secrets.token_hex(16)
+    first = db.execute("SELECT COUNT(*) c FROM users").fetchone()["c"] == 0
+    try:
+        cur = db.execute(
+            "INSERT INTO users(username,display_name,salt,pass_hash,is_admin,created_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (username, (d.get("display_name") or "").strip()[:60], salt,
+             _hash_pw(password, salt), 1 if first else 0, int(time.time())))
+    except Exception:
+        return _err("that username is taken", 409)
+    db.commit()
+    u = db.execute("SELECT * FROM users WHERE id=?", (cur.lastrowid,)).fetchone()
+    resp = jsonify({"ok": True, "user": _user_json(u), "first_admin": first})
+    return _start_session(resp, db, u["id"])
+
+
+@app.post("/api/auth/login")
+def auth_login():
+    db = get_db()
+    d = request.get_json(force=True)
+    u = db.execute("SELECT * FROM users WHERE username=?",
+                   ((d.get("username") or "").strip().lower(),)).fetchone()
+    if not u or _hash_pw(d.get("password") or "", u["salt"]) != u["pass_hash"]:
+        return _err("wrong username or password", 403)
+    resp = jsonify({"ok": True, "user": _user_json(u)})
+    return _start_session(resp, db, u["id"])
+
+
+@app.post("/api/auth/logout")
+def auth_logout():
+    db = get_db()
+    tok = request.cookies.get(SESSION_COOKIE)
+    if tok:
+        db.execute("DELETE FROM sessions WHERE token=?", (tok,))
+        db.commit()
+    resp = jsonify({"ok": True})
+    resp.delete_cookie(SESSION_COOKIE)
+    return resp
+
+
+@app.get("/api/auth/me")
+def auth_me():
+    u = current_user(get_db())
+    return jsonify({"user": _user_json(u) if u else None})
+
+
+@app.get("/api/users/<username>")
+def user_profile(username):
+    """Public navigator profile: every boat they've raced, with results and
+    the full routing-submission history."""
+    db = get_db()
+    u = db.execute("SELECT * FROM users WHERE username=?",
+                   (username.strip().lower(),)).fetchone()
+    if not u:
+        return _err("no such navigator", 404)
+    boats = []
+    for b in db.execute(
+            "SELECT b.*, r.name race_name, r.start_time FROM boats b "
+            "JOIN races r ON r.id = b.race_id WHERE b.owner_id=? "
+            "ORDER BY r.start_time DESC", (u["id"],)):
+        marks = get_marks(db, b["race_id"])
+        subs = db.execute(
+            "SELECT submitted_at, wp_json FROM route_log WHERE boat_id=? "
+            "ORDER BY submitted_at DESC LIMIT 12", (b["id"],)).fetchall()
+        boats.append({
+            "boat_id": b["id"], "boat_name": b["name"],
+            "race_id": b["race_id"], "race_name": b["race_name"],
+            "race_start": b["start_time"],
+            "started": b["sim_time"] is not None,
+            "finished_at": b["finished_at"],
+            "dtf": dtf_nm(b["lat"], b["lon"], marks, b["next_mark"])
+                   if b["lat"] is not None else None,
+            "maneuvers": b["maneuvers"] or 0, "groundings": b["groundings"] or 0,
+            "submissions": [{"at": s["submitted_at"],
+                             "n": len(json.loads(s["wp_json"]))} for s in subs],
+        })
+    viewer = current_user(db)
+    return jsonify({"user": _user_json(u), "joined": u["created_at"], "boats": boats,
+                    "viewer_is_admin": bool(viewer and viewer["is_admin"]),
+                    "is_self": bool(viewer and viewer["id"] == u["id"])})
+
+
+@app.post("/api/users/<username>/admin")
+def set_admin(username):
+    """Admins can grant or revoke the admin role (never the last admin)."""
+    db = get_db()
+    actor = current_user(db)
+    if not (actor and actor["is_admin"]):
+        return _err("admin access required", 403)
+    d = request.get_json(force=True)
+    target = db.execute("SELECT * FROM users WHERE username=?",
+                        (username.strip().lower(),)).fetchone()
+    if not target:
+        return _err("no such user", 404)
+    make_admin = 1 if d.get("admin") else 0
+    if not make_admin:
+        admins = db.execute("SELECT COUNT(*) c FROM users WHERE is_admin=1").fetchone()["c"]
+        if admins <= 1 and target["is_admin"]:
+            return _err("cannot remove the last admin", 409)
+    db.execute("UPDATE users SET is_admin=? WHERE id=?", (make_admin, target["id"]))
+    db.commit()
+    return jsonify({"ok": True, "username": target["username"], "is_admin": bool(make_admin)})
+
+
 # ---------- races -----------------------------------------------------------
 
 @app.get("/api/races")
@@ -91,6 +249,9 @@ def list_races():
 @app.post("/api/races")
 def create_race():
     db = get_db()
+    u = current_user(db)
+    if not (u and u["is_admin"]):
+        return _err("only admin accounts can create races — sign in as an admin", 403)
     d = request.get_json(force=True)
     try:
         name = d["name"].strip()
@@ -125,6 +286,7 @@ def create_race():
          float(d.get("maneuver_penalty_s", 120)),
          1 if d.get("currents_enabled", True) else 0,
          float(d.get("grounding_depth_ft", 15))))
+    db.execute("UPDATE races SET created_by=? WHERE id=?", (u["id"], cur.lastrowid))
     race_id = cur.lastrowid
     for i, m in enumerate(marks):
         db.execute("INSERT INTO marks(race_id,seq,name,lat,lon) VALUES (?,?,?,?,?)",
@@ -174,6 +336,7 @@ def race_state(race_id):
     marks = get_marks(db, race_id)
     course_len = dtf_nm(marks[0]["lat"], marks[0]["lon"], marks, 1) if len(marks) > 1 else 0
 
+    owners = {r["id"]: r["username"] for r in db.execute("SELECT id, username FROM users")}
     entries = []
     for b in db.execute("SELECT * FROM boats WHERE race_id=?", (race_id,)):
         trk = db.execute("SELECT t,lat,lon,bsp FROM track WHERE boat_id=? ORDER BY t",
@@ -189,6 +352,7 @@ def race_state(race_id):
             "dtf": dtf_nm(b["lat"], b["lon"], marks, b["next_mark"]) if b["lat"] is not None else course_len,
             "finished_at": b["finished_at"], "started": b["sim_time"] is not None,
             "has_route": has_route, "maneuvers": b["maneuvers"] or 0,
+            "owner": owners.get(b["owner_id"]),
             "track": [[p["lat"], p["lon"]] for p in _decimate(trk)],
         })
     for rb in db.execute("SELECT * FROM real_boats WHERE race_id=?", (race_id,)):
@@ -266,6 +430,9 @@ def race_from_docs():
     determined, so the client can prefill the manual form instead.
     """
     db = get_db()
+    u = current_user(db)
+    if not (u and u["is_admin"]):
+        return _err("only admin accounts can create races — sign in as an admin", 403)
     try:
         docs = _read_uploads(request)
     except ValueError as e:
@@ -324,6 +491,7 @@ def race_from_docs():
          polar_name or "race polar", polar_text, admin_key, now,
          float(request.form.get("maneuver_penalty_s", 120)), 1, 15.0))
     race_id = cur.lastrowid
+    db.execute("UPDATE races SET created_by=? WHERE id=?", (u["id"], race_id))
     for i, m in enumerate(ex["marks"][:50]):
         db.execute("INSERT INTO marks(race_id,seq,name,lat,lon) VALUES (?,?,?,?,?)",
                    (race_id, i, m["name"] or f"Mark {i}", m["lat"], m["lon"]))
@@ -388,26 +556,66 @@ def register_boat(race_id):
     db = get_db()
     if not _race_or_404(db, race_id):
         return _err("race not found", 404)
+    u = current_user(db)
+    if not u:
+        return _err("sign in to register a boat", 401)
     d = request.get_json(force=True)
-    name, pin = (d.get("name") or "").strip(), str(d.get("pin") or "")
-    if not name or len(pin) < 4:
-        return _err("boat name and a PIN of at least 4 characters are required")
+    name = (d.get("name") or "").strip()
+    if not name:
+        return _err("boat name is required")
     try:
         cur = db.execute(
-            "INSERT INTO boats(race_id,name,pin_hash,created_at) VALUES (?,?,?,?)",
-            (race_id, name, _hash_pin(pin), int(time.time())))
+            "INSERT INTO boats(race_id,name,pin_hash,created_at,owner_id) "
+            "VALUES (?,?,'',?,?)",
+            (race_id, name, int(time.time()), u["id"]))
     except Exception:
         return _err("a boat with that name already exists in this race", 409)
     db.commit()
     return jsonify({"boat_id": cur.lastrowid})
 
 
-def _auth_boat(db, boat_id, pin):
+@app.get("/api/races/<int:race_id>/my_boats")
+def my_boats(race_id):
+    db = get_db()
+    u = current_user(db)
+    if not u:
+        return jsonify([])
+    rows = db.execute(
+        "SELECT id, name, sim_time, finished_at FROM boats "
+        "WHERE race_id=? AND owner_id=? ORDER BY id", (race_id, u["id"])).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/boats/<int:boat_id>/claim")
+def claim_boat(boat_id):
+    """One-time adoption of a pre-account boat using its old PIN."""
+    db = get_db()
+    u = current_user(db)
+    if not u:
+        return _err("sign in first", 401)
+    b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
+    if not b:
+        return _err("boat not found", 404)
+    if b["owner_id"]:
+        return _err("that boat already has an owner", 409)
+    d = request.get_json(force=True)
+    if not b["pin_hash"] or _hash_pin(str(d.get("pin") or "")) != b["pin_hash"]:
+        return _err("wrong PIN", 403)
+    db.execute("UPDATE boats SET owner_id=?, pin_hash='' WHERE id=?", (u["id"], boat_id))
+    db.commit()
+    return jsonify({"ok": True, "boat_id": boat_id, "name": b["name"]})
+
+
+def _auth_boat(db, boat_id):
+    """The signed-in owner (or an admin) controls the boat."""
     b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
     if not b:
         return None, _err("boat not found", 404)
-    if _hash_pin(str(pin or "")) != b["pin_hash"]:
-        return None, _err("wrong PIN", 403)
+    u = current_user(db)
+    if not u:
+        return None, _err("sign in to manage this boat", 401)
+    if b["owner_id"] != u["id"] and not u["is_admin"]:
+        return None, _err("this boat belongs to another navigator", 403)
     return b, None
 
 
@@ -423,7 +631,7 @@ def submit_route(boat_id):
     """
     db = get_db()
     d = request.get_json(force=True)
-    b, err = _auth_boat(db, boat_id, d.get("pin"))
+    b, err = _auth_boat(db, boat_id)
     if err:
         return err
     race = _race_or_404(db, b["race_id"])
@@ -482,9 +690,9 @@ def submit_route(boat_id):
 
 @app.get("/api/boats/<int:boat_id>")
 def boat_detail(boat_id):
-    """Owner view (PIN required): includes the private future routing."""
+    """Owner view (signed in): includes the private future routing."""
     db = get_db()
-    b, err = _auth_boat(db, boat_id, request.args.get("pin"))
+    b, err = _auth_boat(db, boat_id)
     if err:
         return err
     race = _race_or_404(db, b["race_id"])
@@ -527,12 +735,16 @@ def boat_track_gpx(boat_id):
 # ---------- real (tracked) boats -------------------------------------------
 
 def _auth_admin(db, race_id, key):
+    """Race management: any signed-in admin, or the legacy per-race key."""
     r = _race_or_404(db, race_id)
     if not r:
         return None, _err("race not found", 404)
-    if (key or "") != r["admin_key"]:
-        return None, _err("bad admin key", 403)
-    return r, None
+    u = current_user(db)
+    if u and u["is_admin"]:
+        return r, None
+    if key and key == r["admin_key"]:
+        return r, None
+    return None, _err("admin access required", 403)
 
 
 @app.post("/api/races/<int:race_id>/real_boats")

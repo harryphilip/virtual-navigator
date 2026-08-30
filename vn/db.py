@@ -6,6 +6,21 @@ _local = threading.local()
 DB_PATH = os.environ.get("VN_DB", os.path.join(os.path.dirname(__file__), "..", "data", "vn.sqlite"))
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,        -- lowercase handle
+  display_name TEXT DEFAULT '',
+  salt TEXT NOT NULL,
+  pass_hash TEXT NOT NULL,
+  is_admin INTEGER DEFAULT 0,           -- admins create/manage races AND race
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS races (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
@@ -21,7 +36,8 @@ CREATE TABLE IF NOT EXISTS races (
   maneuver_penalty_s REAL DEFAULT 120,  -- time lost per tack/gybe
   currents_enabled INTEGER DEFAULT 1,
   yb_slug TEXT DEFAULT '',              -- linked YB tracker race, if any
-  grounding_depth_ft REAL DEFAULT 15    -- shallower than this: 50% speed
+  grounding_depth_ft REAL DEFAULT 15,   -- shallower than this: 50% speed
+  created_by INTEGER                    -- users.id of the creating admin
 );
 CREATE TABLE IF NOT EXISTS marks (
   race_id INTEGER NOT NULL,
@@ -44,6 +60,7 @@ CREATE TABLE IF NOT EXISTS boats (
   wind_side INTEGER,                    -- tack the boat is on (+1/-1)
   maneuvers INTEGER DEFAULT 0,          -- tacks + gybes so far
   groundings INTEGER DEFAULT 0,         -- sim steps spent in shallow water
+  owner_id INTEGER,                     -- users.id; legacy PIN boats until claimed
   UNIQUE (race_id, name)
 );
 CREATE TABLE IF NOT EXISTS route_wps (
@@ -126,6 +143,8 @@ MIGRATIONS = [
     "ALTER TABLE boats ADD COLUMN maneuvers INTEGER DEFAULT 0",
     "ALTER TABLE boats ADD COLUMN groundings INTEGER DEFAULT 0",
     "ALTER TABLE races ADD COLUMN grounding_depth_ft REAL DEFAULT 15",
+    "ALTER TABLE boats ADD COLUMN owner_id INTEGER",
+    "ALTER TABLE races ADD COLUMN created_by INTEGER",
     "ALTER TABLE real_boats ADD COLUMN yb_id INTEGER",
     "ALTER TABLE real_boats ADD COLUMN last_t INTEGER",
     "ALTER TABLE real_boats ADD COLUMN last_lat REAL",

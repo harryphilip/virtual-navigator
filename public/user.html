@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navigator — Virtual Navigator</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="site">
+  <div class="logo"><a href="/" style="color:inherit">Virtual <span class="wave">~</span> Navigator</a></div>
+  <div class="sub" id="p_title">navigator profile</div>
+  <div class="right"></div>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <h2 id="p_name">…</h2>
+    <div class="small muted" id="p_meta"></div>
+    <div style="margin-top:8px" id="p_adminbox"></div>
+  </div>
+
+  <div class="card">
+    <h2>Races &amp; results</h2>
+    <table class="list" id="p_boats">
+      <thead><tr><th>Race</th><th>Boat</th><th>Status</th><th>DTF&nbsp;nm</th>
+        <th>Tacks</th><th>Aground</th><th>Routings</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="muted small" id="p_none" style="display:none;margin-top:8px">
+      No races yet — pick one from the <a href="/">race list</a> and enter a boat.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Routing history</h2>
+    <p class="small muted" style="margin:2px 0 8px">Every submission is
+    timestamped when it arrives — the audit trail behind the no-time-travel
+    rule. Waypoint details stay private; the log is public.</p>
+    <div id="p_subs" class="small"></div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script>
+const uname = new URLSearchParams(location.search).get('u') || '';
+function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+const when = t => new Date(t * 1000).toISOString().slice(0, 16).replace('T', ' ');
+
+(async function init() {
+  const res = await fetch('/api/users/' + encodeURIComponent(uname));
+  const j = await res.json();
+  if (!res.ok) {
+    document.getElementById('p_name').textContent = j.error || 'error';
+    return;
+  }
+  const u = j.user;
+  document.title = u.display_name + ' — Virtual Navigator';
+  document.getElementById('p_name').innerHTML = '⛵ ' + esc(u.display_name) +
+    (u.is_admin ? ' <span class="badge real">admin</span>'
+                : ' <span class="badge virtual">navigator</span>');
+  document.getElementById('p_meta').textContent =
+    `@${u.username} · aboard since ${when(j.joined).slice(0, 10)} · ` +
+    `${j.boats.length} race${j.boats.length === 1 ? '' : 's'}`;
+
+  if (j.viewer_is_admin && !j.is_self) {
+    const box = document.getElementById('p_adminbox');
+    box.innerHTML = `<button class="ghost" id="p_mkadmin">` +
+      (u.is_admin ? 'Revoke admin' : 'Make admin') + `</button> <span class="msg" id="p_amsg"></span>`;
+    document.getElementById('p_mkadmin').onclick = async () => {
+      const r = await fetch(`/api/users/${encodeURIComponent(u.username)}/admin`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ admin: !u.is_admin }) });
+      const jj = await r.json();
+      if (r.ok) location.reload();
+      else document.getElementById('p_amsg').textContent = jj.error;
+    };
+  }
+
+  const tb = document.querySelector('#p_boats tbody');
+  document.getElementById('p_none').style.display = j.boats.length ? 'none' : 'block';
+  const subsDiv = document.getElementById('p_subs');
+  for (const b of j.boats) {
+    const status = b.finished_at
+      ? `<span class="badge fin">finished ${when(b.finished_at)}</span>`
+      : b.started ? '<span class="badge virtual">racing</span>'
+                  : '<span class="badge">not started</span>';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><a href="/race?id=${b.race_id}">${esc(b.race_name)}</a></td>
+      <td>${esc(b.boat_name)}</td><td>${status}</td>
+      <td>${b.finished_at ? '0' : b.dtf == null ? '—' : Math.round(b.dtf)}</td>
+      <td>${b.maneuvers}</td>
+      <td>${b.groundings ? '⚠ ' + b.groundings : '—'}</td>
+      <td>${b.submissions.length}</td>`;
+    tb.appendChild(tr);
+    if (b.submissions.length) {
+      subsDiv.innerHTML += `<h3 style="color:var(--accent);font-size:13px;margin:10px 0 4px">` +
+        `${esc(b.boat_name)} — ${esc(b.race_name)}</h3>` +
+        b.submissions.map(s => `<div>· ${when(s.at)}z — routing with ${s.n} waypoints</div>`).join('');
+    }
+  }
+  if (!subsDiv.innerHTML) subsDiv.innerHTML = '<span class="muted">no routings submitted yet</span>';
+})();
+</script>
+</body>
+</html>

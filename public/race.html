@@ -47,19 +47,28 @@
 
     <div class="card" id="myboat">
       <h2>My boat</h2>
-      <div id="mb_register">
+      <div id="mb_signin" style="display:none">
+        <p class="small muted" style="margin:2px 0 8px">Sign in (or register) to race.</p>
         <div class="row">
-          <div><label>Boat name</label><input id="mb_name"></div>
-          <div><label>PIN (keep it!)</label><input id="mb_pin" type="password"></div>
+          <div><label>Username</label><input id="mb_user"></div>
+          <div><label>Password</label><input id="mb_pass" type="password"></div>
         </div>
-        <div style="margin-top:10px" class="row">
-          <button id="mb_reg_go">Register new boat</button>
-          <button class="ghost" id="mb_login_go">Sign in to existing</button>
-        </div>
-        <div id="mb_login" style="display:none;margin-top:8px">
-          <label>Boat ID</label><input id="mb_id" placeholder="numeric id">
+        <div class="row" style="margin-top:8px">
+          <button id="mb_auth_login">Sign in</button>
+          <button class="ghost" id="mb_auth_reg">Register</button>
         </div>
         <div class="msg" id="mb_msg"></div>
+      </div>
+      <div id="mb_register" style="display:none">
+        <label>Boat name</label><input id="mb_name">
+        <div style="margin-top:10px"><button id="mb_reg_go">Enter this race</button></div>
+        <div class="msg" id="mb_msg1"></div>
+        <p class="small"><a href="#" id="mb_claim_toggle">Claim a pre-account boat (old PIN)</a></p>
+        <div id="mb_claim" style="display:none" class="row">
+          <div><label>Boat ID</label><input id="mb_claim_id"></div>
+          <div><label>PIN</label><input id="mb_claim_pin" type="password"></div>
+          <div style="align-self:end"><button class="ghost" id="mb_claim_go">Claim</button></div>
+        </div>
       </div>
 
       <div id="mb_manage" style="display:none">
@@ -89,7 +98,7 @@
         <div class="small">
           <a id="mb_polar" href="#">⬇ race polar (.pol)</a> ·
           <a id="mb_gpx" href="#">⬇ my track (.gpx)</a> ·
-          <a href="#" id="mb_logout">sign out</a>
+          <a id="mb_profile" href="#">my profile</a>
         </div>
         <div class="small muted" id="mb_subs" style="margin-top:6px"></div>
       </div>
@@ -111,15 +120,11 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/js/auth.js"></script>
 <script>
 const raceId = +new URLSearchParams(location.search).get('id');
-const store = {
-  get k() { return 'vn_race_' + raceId; },
-  load() { try { return JSON.parse(localStorage.getItem(this.k)) || null; } catch { return null; } },
-  save(v) { localStorage.setItem(this.k, JSON.stringify(v)); },
-  clear() { localStorage.removeItem(this.k); },
-};
-let race = null, state = null, my = store.load();
+let race = null, state = null, me = null;
+let my = null;   // { boatId } — the selected boat in this race, owned via session
 let filter = 'all';
 let drawMode = false, drawWps = [];
 
@@ -345,8 +350,11 @@ function drawLeaderboard() {
       : !e.started ? '<span class="badge">—</span>'
       : e.type === 'real' ? `<span class="badge real">${esc(e.klass)}</span>`
       : '<span class="badge virtual">virtual</span>';
+    const nm = e.owner
+      ? `<a href="/user?u=${encodeURIComponent(e.owner)}" style="color:inherit">${esc(e.name)}</a>`
+      : esc(e.name);
     tr.innerHTML = `<td>${e.rank}</td>
-      <td ${mine ? 'style="color:var(--accent);font-weight:650"' : ''}>${esc(e.name)}${mine ? ' ◂' : ''}</td>
+      <td ${mine ? 'style="color:var(--accent);font-weight:650"' : ''}>${nm}${mine ? ' ◂' : ''}</td>
       <td>${badge}</td><td>${e.finished_at ? '0' : Math.round(e.dtf)}</td><td>${fmt1(e.sog)}</td>`;
     tb.appendChild(tr);
   });
@@ -355,18 +363,24 @@ function drawLeaderboard() {
 }
 
 /* ---------------- my boat ---------------- */
-function showManage() {
-  document.getElementById('mb_register').style.display = my ? 'none' : 'block';
-  document.getElementById('mb_manage').style.display = my ? 'block' : 'none';
+async function showManage() {
+  me = await vnMe();
+  const boats = me ? await api(`/api/races/${raceId}/my_boats`) : [];
+  if (boats.length && !my) my = { boatId: boats[0].id };
+  if (my && !boats.some(b => b.id === my.boatId)) my = boats.length ? { boatId: boats[0].id } : null;
+  document.getElementById('mb_signin').style.display = me ? 'none' : 'block';
+  document.getElementById('mb_register').style.display = (me && !my) ? 'block' : 'none';
+  document.getElementById('mb_manage').style.display = (me && my) ? 'block' : 'none';
   if (my) {
     document.getElementById('mb_polar').href = `/api/races/${raceId}/polar`;
     document.getElementById('mb_gpx').href = `/api/boats/${my.boatId}/track.gpx`;
+    document.getElementById('mb_profile').href = `/user?u=${encodeURIComponent(me.username)}`;
   }
 }
 
 async function refreshMine() {
   if (!my) return;
-  const b = await api(`/api/boats/${my.boatId}?pin=${encodeURIComponent(my.pin)}`);
+  const b = await api(`/api/boats/${my.boatId}`);
   const st = document.getElementById('mb_status');
   const when = t => new Date(t * 1000).toISOString().slice(5, 16).replace('T', ' ');
   if (b.finished_at) {
@@ -394,35 +408,44 @@ async function refreshMine() {
     : '';
 }
 
-document.getElementById('mb_reg_go').onclick = async () => {
+async function authAction(path) {
   const msg = document.getElementById('mb_msg');
+  try {
+    await api(path, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: document.getElementById('mb_user').value,
+                            password: document.getElementById('mb_pass').value }) });
+    await vnMe(true); vnHeader();
+    await showManage(); refreshMine().catch(() => {});
+  } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+}
+document.getElementById('mb_auth_login').onclick = () => authAction('/api/auth/login');
+document.getElementById('mb_auth_reg').onclick = () => authAction('/api/auth/register');
+
+document.getElementById('mb_reg_go').onclick = async () => {
+  const msg = document.getElementById('mb_msg1');
   try {
     const name = document.getElementById('mb_name').value.trim();
-    const pin = document.getElementById('mb_pin').value;
     const j = await api(`/api/races/${raceId}/boats`, { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, pin }) });
-    my = { boatId: j.boat_id, pin, name };
-    store.save(my);
-    msg.className = 'msg ok'; msg.textContent = '';
-    showManage(); refreshMine();
+      body: JSON.stringify({ name }) });
+    my = { boatId: j.boat_id };
+    await showManage(); refreshMine();
   } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
 };
-document.getElementById('mb_login_go').onclick = async () => {
-  const loginDiv = document.getElementById('mb_login');
-  if (loginDiv.style.display === 'none') { loginDiv.style.display = 'block'; return; }
-  const msg = document.getElementById('mb_msg');
+document.getElementById('mb_claim_toggle').onclick = (ev) => {
+  ev.preventDefault();
+  document.getElementById('mb_claim').style.display = 'flex';
+};
+document.getElementById('mb_claim_go').onclick = async () => {
+  const msg = document.getElementById('mb_msg1');
   try {
-    const id = +document.getElementById('mb_id').value;
-    const pin = document.getElementById('mb_pin').value;
-    const b = await api(`/api/boats/${id}?pin=${encodeURIComponent(pin)}`);
-    my = { boatId: id, pin, name: b.name };
-    store.save(my);
-    showManage(); refreshMine();
+    const j = await api(`/api/boats/${+document.getElementById('mb_claim_id').value}/claim`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: document.getElementById('mb_claim_pin').value }) });
+    my = { boatId: j.boat_id };
+    await showManage(); refreshMine();
   } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
-};
-document.getElementById('mb_logout').onclick = (ev) => {
-  ev.preventDefault(); store.clear(); my = null; planLayer.clearLayers(); showManage();
 };
 
 /* route drawing */
@@ -467,7 +490,7 @@ async function submitRoute(payload) {
   try {
     const j = await api(`/api/boats/${my.boatId}/route`, { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin: my.pin, ...payload }) });
+      body: JSON.stringify(payload) });
     let text = `Routing accepted — ${j.waypoints} waypoints ahead of you.`;
     if (j.adjustments && j.adjustments.length)
       text += ' Course adjustments: ' + j.adjustments.join('; ') + '.';
@@ -490,7 +513,7 @@ setInterval(() => {
 
 (async function init() {
   await loadRace();
-  showManage();
+  await showManage();
   await refresh();
   setInterval(refresh, 60000);
 })().catch(e => { document.getElementById('r_name').textContent = 'error: ' + e.message; });

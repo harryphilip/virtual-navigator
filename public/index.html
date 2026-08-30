@@ -10,9 +10,30 @@
 <header class="site">
   <div class="logo">Virtual <span class="wave">~</span> Navigator</div>
   <div class="sub">fantasy offshore racing — route it like you're on board</div>
+  <div class="right"></div>
 </header>
 
 <div class="wrap">
+  <div class="card" id="account">
+    <h2>Account</h2>
+    <div id="acct_out">
+      <div class="row">
+        <div><label>Username</label><input id="a_user" autocomplete="username"></div>
+        <div><label>Password</label><input id="a_pass" type="password" autocomplete="current-password"></div>
+        <div><label>Display name (for register)</label><input id="a_disp"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="a_login">Sign in</button>
+        <button class="ghost" id="a_reg">Register as navigator</button>
+      </div>
+      <div class="msg" id="a_msg"></div>
+      <p class="small muted" style="margin:6px 0 0">Navigators enter races and
+      submit routings. The first account on a fresh server becomes the admin;
+      admins create races (and race too — their profile is a navigator profile
+      like any other).</p>
+    </div>
+    <div id="acct_in" style="display:none" class="small"></div>
+  </div>
   <div class="card">
     <h2>How it works</h2>
     <p class="small muted" style="margin:4px 0 10px">
@@ -51,7 +72,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" id="autocreate_card" style="display:none">
     <h2>⚡ Auto-create from the Notice of Race / Sailing Instructions</h2>
     <p class="small muted" style="margin:4px 0 10px">
       Drop in the official race documents (PDF or text) and a virtual race is
@@ -75,7 +96,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" id="create_card" style="display:none">
     <h2>Create a race</h2>
     <div class="row">
       <div>
@@ -169,7 +190,45 @@
   </div>
 </div>
 
+<script src="/js/auth.js"></script>
 <script>
+async function initAccount() {
+  const u = await vnMe();
+  const isAdmin = !!(u && u.is_admin);
+  document.getElementById('acct_out').style.display = u ? 'none' : 'block';
+  const acctIn = document.getElementById('acct_in');
+  acctIn.style.display = u ? 'block' : 'none';
+  if (u) {
+    acctIn.innerHTML = `Signed in as <a href="/user?u=${encodeURIComponent(u.username)}">` +
+      `<b>${esc(u.display_name)}</b></a>` +
+      (u.is_admin ? ' — admin: you can create races below.' :
+       ' — navigator: pick a race and register a boat on its page. ' +
+       'Race creation needs an admin account.');
+  }
+  // race-creation cards are admin-only
+  for (const id of ['create_card', 'autocreate_card']) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isAdmin ? 'block' : 'none';
+  }
+}
+async function acctSubmit(path) {
+  const msg = document.getElementById('a_msg');
+  try {
+    const res = await fetch(path, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: document.getElementById('a_user').value,
+        password: document.getElementById('a_pass').value,
+        display_name: document.getElementById('a_disp').value }) });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || res.statusText);
+    if (j.first_admin) alert('You are the first account — you have the admin role.');
+    location.reload();
+  } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+}
+document.getElementById('a_login').onclick = () => acctSubmit('/api/auth/login');
+document.getElementById('a_reg').onclick = () => acctSubmit('/api/auth/register');
+initAccount();
+
 async function loadRaces() {
   const races = await (await fetch('/api/races')).json();
   const tb = document.querySelector('#races tbody');

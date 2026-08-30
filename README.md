@@ -88,6 +88,26 @@ through real historical wind. Demo boats use PIN `0000`; the demo admin key is
   from the real tracks. (Verified against the Rolex Fastnet 2025 feed —
   the decoder speaks YB's binary AllPositions3/LatestPositions3 format.)
 
+## Accounts & roles
+
+No PINs — proper navigator accounts (username + password, salted PBKDF2,
+90-day session cookies). Two roles on one account type:
+
+- **Navigators** register boats in races, submit routings, and get a public
+  profile page (`/user?u=<name>`) showing every race they've sailed, results
+  (finish time or distance to go), tacks, groundings, and the timestamped
+  routing-submission log — the audit trail behind the no-time-travel rule.
+- **Admins** additionally create and manage races (YB links, documents,
+  tracker imports) — and race like anyone else; admin is a flag, not a
+  separate account. The **first account registered on a fresh server becomes
+  the admin**; admins can promote or demote others from profile pages (the
+  last admin can't be removed), and `scripts/make_admin.py <username>` works
+  from the server console as a recovery path.
+
+Boats created before accounts existed can be **claimed once** with their old
+PIN from the race page. The per-race `admin_key` still works for scripted
+admin API calls.
+
 ## Auto-creating a race from the Notice of Race / SIs
 
 Upload the official race documents (PDF or text) on the home page and a
@@ -128,9 +148,12 @@ POST /api/races                      create (returns admin_key)
 GET  /api/races/<id>                 course + settings
 GET  /api/races/<id>/polar           the polar file
 GET  /api/races/<id>/state           leaderboard + fleet positions (advances the sim)
-POST /api/races/<id>/boats           register a virtual boat {name, pin}
-POST /api/boats/<id>/route           submit/update routing {pin, waypoints|gpx|csv}
-GET  /api/boats/<id>?pin=…           owner view incl. private future route
+POST /api/auth/register|login|logout account endpoints (session cookie)
+GET  /api/users/<name>               public navigator profile + history
+POST /api/races/<id>/boats           register a virtual boat {name} (signed in)
+POST /api/boats/<id>/route           submit/update routing {waypoints|gpx|csv} (owner)
+GET  /api/boats/<id>                 owner view incl. private future route
+POST /api/boats/<id>/claim           adopt a pre-account boat with its old PIN
 GET  /api/boats/<id>/track.gpx       sailed track export
 POST /api/races/<id>/real_boats      add tracked real boat {admin_key, name, klass}
 POST /api/real_boats/<id>/track      import tracker positions {admin_key, text}
