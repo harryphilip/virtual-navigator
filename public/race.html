@@ -73,6 +73,14 @@
 
       <div id="mb_manage" style="display:none">
         <div class="small" id="mb_status"></div>
+        <div id="mb_fix" style="display:none;margin-top:6px" class="small">
+          <code id="mb_pos"></code>
+          <span class="muted" id="mb_fix_meta"></span>
+          <div class="row" style="margin-top:6px">
+            <button class="ghost" id="mb_center">📍 Center chart</button>
+            <button class="ghost" id="mb_copy">Copy position</button>
+          </div>
+        </div>
         <div class="msg" id="mb_msg2"></div>
 
         <h3>Submit / update routing</h3>
@@ -98,6 +106,7 @@
         <div class="small">
           <a id="mb_polar" href="#">⬇ race polar (.pol)</a> ·
           <a id="mb_gpx" href="#">⬇ my track (.gpx)</a> ·
+          <a id="mb_posgpx" href="#" title="one-waypoint GPX: import as the departure point for your next routing run">⬇ position (.gpx)</a> ·
           <a id="mb_profile" href="#">my profile</a>
         </div>
         <div class="small muted" id="mb_subs" style="margin-top:6px"></div>
@@ -374,12 +383,37 @@ async function showManage() {
   if (my) {
     document.getElementById('mb_polar').href = `/api/races/${raceId}/polar`;
     document.getElementById('mb_gpx').href = `/api/boats/${my.boatId}/track.gpx`;
+    document.getElementById('mb_posgpx').href = `/api/boats/${my.boatId}/position.gpx`;
     document.getElementById('mb_profile').href = `/user?u=${encodeURIComponent(me.username)}`;
   }
 }
 
+let myFix = null;
+async function refreshFix() {
+  const box = document.getElementById('mb_fix');
+  try {
+    myFix = await api(`/api/boats/${my.boatId}/position`);
+    document.getElementById('mb_pos').textContent = myFix.position;
+    document.getElementById('mb_fix_meta').textContent =
+      ` · ${fmt1(myFix.sog_kn)} kn · ${Math.round(myFix.dtf_nm)} nm to go · as of ${myFix.time_utc}`;
+    box.style.display = 'block';
+  } catch { box.style.display = 'none'; myFix = null; }
+}
+document.getElementById('mb_center').onclick = () => {
+  if (myFix) { userMoved = true; map.setView([myFix.lat, myFix.lon], Math.max(map.getZoom(), 9)); }
+};
+document.getElementById('mb_copy').onclick = async () => {
+  if (!myFix) return;
+  const txt = `${myFix.lat.toFixed(5)}, ${myFix.lon.toFixed(5)}`;
+  try { await navigator.clipboard.writeText(txt); } catch {}
+  const btn = document.getElementById('mb_copy');
+  btn.textContent = `Copied ${txt}`;
+  setTimeout(() => { btn.textContent = 'Copy position'; }, 2500);
+};
+
 async function refreshMine() {
   if (!my) return;
+  refreshFix().catch(() => {});
   const b = await api(`/api/boats/${my.boatId}`);
   const st = document.getElementById('mb_status');
   const when = t => new Date(t * 1000).toISOString().slice(5, 16).replace('T', ' ');

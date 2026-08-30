@@ -664,12 +664,23 @@ def submit_route(boat_id):
         if b["finished_at"]:
             return _err("boat has finished — routing is closed", 409)
 
-    # softly reconcile the routing with the course: skip waypoints already
-    # underfoot, and make sure every remaining mark (finish included) is
-    # actually visited — inserted, not disqualified, when the routing's
-    # own start/finish/mark placement differs from the race's
+    # softly reconcile the routing with the course: join a re-uploaded
+    # routing at the boat (course-over-ground aware, so out-and-back legs
+    # can't fool it), skip waypoints already underfoot, and make sure every
+    # remaining mark (finish included) is actually visited — inserted, not
+    # disqualified, when the routing's own mark placement differs
+    last2 = db.execute("SELECT lat,lon FROM track WHERE boat_id=? "
+                       "ORDER BY t DESC LIMIT 2", (boat_id,)).fetchall()
+    cog = None
+    if len(last2) == 2:
+        from vn.geo import bearing_deg, haversine_nm
+        if haversine_nm(last2[1]["lat"], last2[1]["lon"],
+                        last2[0]["lat"], last2[0]["lon"]) > 0.05:
+            cog = bearing_deg(last2[1]["lat"], last2[1]["lon"],
+                              last2[0]["lat"], last2[0]["lon"])
     wps, adjustments = enforce_course(
-        wps, marks, b["next_mark"], race["mark_radius_nm"], (b["lat"], b["lon"]))
+        wps, marks, b["next_mark"], race["mark_radius_nm"],
+        (b["lat"], b["lon"]), cog)
 
     for i, (lat, lon) in enumerate(wps):
         if not (-90 <= lat <= 90 and -180 <= lon <= 180):
@@ -716,6 +727,72 @@ def boat_detail(boat_id):
         "submissions": [{"at": l["submitted_at"],
                          "n": len(json.loads(l["wp_json"]))} for l in log],
     })
+
+
+def _fmt_dm(v, is_lat):
+    hemi = ("N" if v >= 0 else "S") if is_lat else ("E" if v >= 0 else "W")
+    v = abs(v)
+    deg = int(v)
+    return f"{deg:0{2 if is_lat else 3}d}° {(v - deg) * 60:05.2f}' {hemi}"
+
+
+def _boat_fix(db, b):
+    """Latest simulated fix for a boat, or None before its start."""
+    last = db.execute(
+        "SELECT * FROM track WHERE boat_id=? ORDER BY t DESC LIMIT 1",
+        (b["id"],)).fetchone()
+    if not last:
+        return None
+    return {"t": last["t"],
+            "time_utc": dt.datetime.fromtimestamp(last["t"], dt.timezone.utc)
+                          .strftime("%Y-%m-%d %H:%M UTC"),
+            "lat": last["lat"], "lon": last["lon"],
+            "position": f'{_fmt_dm(last["lat"], True)}  {_fmt_dm(last["lon"], False)}',
+            "sog_kn": last["bsp"], "hdg": last["hdg"],
+            "twd": last["twd"], "tws_kn": last["tws"]}
+
+
+@app.get("/api/boats/<int:boat_id>/position")
+def boat_position(boat_id):
+    """The boat's latest fix — positions are public, like any race tracker."""
+    db = get_db()
+    b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
+    if not b:
+        return _err("boat not found", 404)
+    catch_up_race(db, b["race_id"])
+    fix = _boat_fix(db, b)
+    if not fix:
+        return _err("boat has not started yet", 404)
+    marks = get_marks(db, b["race_id"])
+    b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
+    fix.update({"boat": b["name"], "finished": b["finished_at"] is not None,
+                "dtf_nm": round(dtf_nm(b["lat"], b["lon"], marks, b["next_mark"]), 1)})
+    return jsonify(fix)
+
+
+@app.get("/api/boats/<int:boat_id>/position.gpx")
+def boat_position_gpx(boat_id):
+    """Current position as a one-waypoint GPX — import it into your routing
+    software as the departure point for the next routing run."""
+    db = get_db()
+    b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
+    if not b:
+        return _err("boat not found", 404)
+    catch_up_race(db, b["race_id"])
+    fix = _boat_fix(db, b)
+    if not fix:
+        return _err("boat has not started yet", 404)
+    iso = dt.datetime.fromtimestamp(fix["t"], dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    name = b["name"].replace("&", "&amp;").replace("<", "&lt;")
+    gpx = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+           '<gpx version="1.1" creator="Virtual Navigator" '
+           'xmlns="http://www.topografix.com/GPX/1/1">\n'
+           f'  <wpt lat="{fix["lat"]:.6f}" lon="{fix["lon"]:.6f}">'
+           f'<time>{iso}</time><name>{name} — current position</name></wpt>\n'
+           '</gpx>\n')
+    return Response(gpx, mimetype="application/gpx+xml",
+                    headers={"Content-Disposition":
+                             f'attachment; filename="{b["name"]}_position.gpx"'})
 
 
 @app.get("/api/boats/<int:boat_id>/track.gpx")

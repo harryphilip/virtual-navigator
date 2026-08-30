@@ -12,7 +12,7 @@ import threading
 import time
 
 from .depth import get_depth_ft
-from .geo import haversine_nm, bearing_deg, destination
+from .geo import angle_diff, haversine_nm, bearing_deg, destination
 from .polar import Polar
 from .wind import get_wind, get_current
 
@@ -158,7 +158,7 @@ def _advance(db, race, polar, marks, boat, until):
         (t, lat, lon, next_mark, finished, side, maneuvers, groundings, boat["id"]))
 
 
-def enforce_course(wps, marks, next_mark, radius_nm, start_pos=None):
+def enforce_course(wps, marks, next_mark, radius_nm, start_pos=None, cog=None):
     """Softly reconcile a submitted routing with the race course.
 
     A routing exported from navigation software rarely lands exactly on the
@@ -178,13 +178,61 @@ def enforce_course(wps, marks, next_mark, radius_nm, start_pos=None):
     """
     wps = list(wps)
     notes = []
-    if start_pos is not None:
+    if start_pos is not None and wps:
+        # A mid-race re-submission often re-includes the already-sailed part
+        # (a full re-run of the router from the start).  Join the new routing
+        # at its closest point to the boat — searching only the portion of
+        # the routing before it first reaches the next course mark, so an
+        # out-and-back course can never tempt the join toward the finish.
+        j = len(wps)
+        if next_mark < len(marks):
+            mk = marks[next_mark]
+            # skip any initial dwell at the mark itself first — on an
+            # out-and-back course the routing's first waypoint can sit on
+            # the finish, which is also the next mark
+            s = 0
+            while s < len(wps) and haversine_nm(
+                    wps[s][0], wps[s][1], mk["lat"], mk["lon"]) <= radius_nm:
+                s += 1
+            for i in range(s, len(wps)):
+                if haversine_nm(wps[i][0], wps[i][1],
+                                mk["lat"], mk["lon"]) <= radius_nm:
+                    j = i + 1
+                    break
+        def _leg_dir(i):
+            if i + 1 < len(wps):
+                return bearing_deg(wps[i][0], wps[i][1], wps[i + 1][0], wps[i + 1][1])
+            if i > 0:
+                return bearing_deg(wps[i - 1][0], wps[i - 1][1], wps[i][0], wps[i][1])
+            return None
+
+        def _score(i):
+            d = haversine_nm(start_pos[0], start_pos[1], wps[i][0], wps[i][1])
+            # a leg pointing against the boat's course over ground is the
+            # wrong pass of an out-and-back — push it far down the ranking
+            ld = _leg_dir(i)
+            if cog is not None and ld is not None and angle_diff(ld, cog) > 100:
+                d += 25.0
+            return d
+
+        k = min(range(j), key=_score)
+        # walk forward past every segment the boat has already overtaken —
+        # joins ahead, never astern
+        while k + 1 < len(wps) and haversine_nm(
+                start_pos[0], start_pos[1], wps[k + 1][0], wps[k + 1][1]
+        ) <= haversine_nm(wps[k][0], wps[k][1], wps[k + 1][0], wps[k + 1][1]):
+            k += 1
+        if k > 0:
+            wps = wps[k:]
+            notes.append(f"joined the new routing at its closest point to "
+                         f"your position — dropped {k} already-passed "
+                         "waypoint(s) behind you")
         dropped = 0
         while wps and haversine_nm(start_pos[0], start_pos[1],
                                    wps[0][0], wps[0][1]) <= radius_nm:
             wps.pop(0)
             dropped += 1
-        if dropped:
+        if dropped and not k:
             notes.append(f"skipped {dropped} leading waypoint(s) already at "
                          "your position")
     pos = 0
