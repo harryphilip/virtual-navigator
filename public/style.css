@@ -45,6 +45,38 @@ header.site .right {
 
 .wrap { max-width: 1080px; margin: 0 auto; padding: 26px 22px 70px; }
 
+/* ---- home hero ----------------------------------------------------------- */
+.hero { padding: 34px 4px 26px; }
+.hero h1 {
+  margin: 0 0 10px; font-size: 30px; line-height: 1.2;
+  letter-spacing: -.01em; max-width: 620px;
+}
+.hero .lead { margin: 0; max-width: 640px; color: var(--muted); font-size: 15.5px; }
+.hero .lead b, .hero .lead i { color: var(--text); }
+.hero-tiles {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  margin-top: 22px; font-size: 13px; color: var(--muted);
+}
+.hero-tiles > div {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 13px 15px;
+}
+.hero-tiles b { color: var(--text); }
+@media (max-width: 760px) { .hero-tiles { grid-template-columns: 1fr; } }
+
+/* ---- home race board ------------------------------------------------------ */
+#home_map {
+  height: 360px; border: 1px solid var(--border); border-radius: 8px;
+  background: #14161a; margin-bottom: 14px;
+}
+.race-item {
+  padding: 10px 14px; margin-bottom: 10px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 6px;
+}
+.race-item-head { margin-bottom: 4px; }
+table.podium { margin-top: 4px; }
+table.podium td { padding: 3px 8px; border-bottom: none; font-size: 13px; }
+
 /* ---- cards: hairline panels with micro-cap labels ----------------------- */
 .card {
   background: var(--panel);

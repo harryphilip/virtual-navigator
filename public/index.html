@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Virtual Navigator</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -14,6 +15,67 @@
 </header>
 
 <div class="wrap">
+
+  <div class="hero">
+    <h1>Beat the fleet with a better forecast read.</h1>
+    <p class="lead">Virtual Navigator is fantasy sport for offshore sailing:
+    pick a real race, submit a routing, and the ocean sails it for you —
+    through the <b>actual weather</b>, against the other navigators <i>and</i>
+    the real boats on the tracker.</p>
+    <div class="hero-tiles">
+      <div><b>Real weather, real physics</b><br>
+        Your boat sails live wind, ocean current and bathymetry on the shared
+        class polar. Tacks cost time; shoals cost speed.</div>
+      <div><b>No hindsight, ever</b><br>
+        The sim only moves forward. What's sailed is locked, so the race is
+        decided by what you knew when you routed — same as on board.</div>
+      <div><b>Race the real fleet</b><br>
+        Live trackers put the actual boats on your leaderboard. Would your
+        routing have beaten the crews who were out there?</div>
+    </div>
+    <div style="margin-top:16px">
+      <a href="#live"><button>See the races</button></a>
+      <a href="#start"><button class="ghost">New to routing? Start here</button></a>
+    </div>
+  </div>
+
+  <div class="card" id="live">
+    <h2>Race board</h2>
+    <div id="home_map" style="display:none"></div>
+    <div id="race_list"></div>
+    <div id="norace" class="muted small" style="display:none;margin-top:8px">
+      No races yet.
+    </div>
+  </div>
+
+  <div class="card" id="start">
+    <h2>Never navigated an offshore race? Start here</h2>
+    <p class="small muted" style="margin:4px 0 10px">
+      Offshore navigation is a real discipline — reading forecasts, picking a
+      lane, trading distance for wind. This is the lowest-stakes way there is
+      to learn it: the boat is virtual, the ocean isn't.</p>
+    <ol class="steplist small">
+      <li><b>Register</b> (free, below) and open a race that's upcoming or in
+        progress, then register a boat on its page.</li>
+      <li><b>No software needed to play:</b> hit <i>Draw on chart</i>, click a
+        line of waypoints from start to finish, submit. You're racing. A
+        straight line is a legitimate first strategy — the leaderboard will
+        teach you why the winners didn't sail one.</li>
+      <li><b>Look at the weather once a day.</b> Download the race's
+        <i>on-board forecast</i> (a GRIB file — the same wind your boat will
+        sail) and adjust the part of your route you haven't sailed yet.
+        Position, forecast, tweak: that's the whole navigator's loop.</li>
+      <li><b>Level up with free tools.</b> <a href="https://www.meltemus.com/index.php/en/"
+        target="_blank" rel="noopener">qtVlm</a> is free routing software the
+        pros practice on: import the race's <i>course route</i> and
+        <i>polar</i>, load the GRIB, let it compute an optimal route, export
+        GPX, upload here. Now you're weather routing like a Vendée navigator.</li>
+      <li><b>Compare your wake.</b> Your sailed track downloads as GPX —
+        overlay it on the real fleet's and see exactly where the ocean
+        agreed with you.</li>
+    </ol>
+  </div>
+
   <div class="card" id="account">
     <h2>Account</h2>
     <div id="acct_out">
@@ -34,42 +96,22 @@
     </div>
     <div id="acct_in" style="display:none" class="small"></div>
   </div>
-  <div class="card">
-    <h2>How it works</h2>
-    <p class="small muted" style="margin:4px 0 10px">
-      Pick a race, register a virtual boat, and submit a routing from your own
-      navigation software — like fantasy baseball, but your lineup is a set of
-      waypoints. Every virtual boat sails the <b>same polar</b> through the
-      <b>same real weather</b>; the leaderboard ranks you against the other
-      armchair navigators <i>and</i> the real boats on the tracker.
-    </p>
-    <ol class="steplist small">
-      <li><b>Download the race polar</b> and load it into Expedition, Adrena, qtVlm,
-          TimeZero, LuckGrib, PredictWind — anything that can export a route as
-          <b>GPX or CSV</b>.</li>
-      <li><b>Run your own weather routing</b> with the forecasts you'd have on board,
-          then upload the route here as your routing.</li>
-      <li><b>Update as the race unfolds</b> — but only the part of the course you
-          haven't sailed yet. The engine advances your boat in (near) real time
-          through actual wind, so the past is locked and <b>routings can never go
-          back in time</b>. No hindsight, no replaying yesterday's shift.</li>
-      <li>Your future routing stays <b>private</b> until sailed; your wake is public,
-          just like a real race tracker.</li>
-    </ol>
-  </div>
 
   <div class="card">
-    <h2>Races</h2>
-    <table class="list" id="races">
-      <thead><tr>
-        <th>Race</th><th>Start (UTC)</th><th>Status</th><th>Polar</th>
-        <th>Perf</th><th>Virtual</th><th>Real</th>
-      </tr></thead>
-      <tbody></tbody>
-    </table>
-    <div id="norace" class="muted small" style="display:none;margin-top:8px">
-      No races yet — create one below.
-    </div>
+    <h2>The rules of the game</h2>
+    <ol class="steplist small">
+      <li><b>One polar for the whole fleet</b>, derated to a realistic
+        performance factor — nobody wins on boatspeed, only on routing.</li>
+      <li><b>The engine sails your waypoints</b> through real surface wind and
+        current every few minutes, steering best-VMC toward your next mark —
+        a wind shift never parks you head-to-wind.</li>
+      <li><b>Updates replace only the future.</b> The past is locked, tacks and
+        gybes cost seconds, water under 15 ft costs half your speed, and a
+        routing that misses a mark gets bent back through it — never
+        disqualified, never shortened.</li>
+      <li><b>Your future route is private</b> until sailed; your wake is
+        public, like any race tracker.</li>
+    </ol>
   </div>
 
   <div class="card" id="autocreate_card" style="display:none">
@@ -194,8 +236,11 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="/js/auth.js"></script>
 <script>
+function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+
 async function initAccount() {
   const u = await vnMe();
   const isAdmin = !!(u && u.is_admin);
@@ -209,7 +254,6 @@ async function initAccount() {
        ' — navigator: pick a race and register a boat on its page. ' +
        'Race creation needs an admin account.');
   }
-  // race-creation cards are admin-only
   for (const id of ['create_card', 'autocreate_card']) {
     const el = document.getElementById(id);
     if (el) el.style.display = isAdmin ? 'block' : 'none';
@@ -233,23 +277,83 @@ document.getElementById('a_login').onclick = () => acctSubmit('/api/auth/login')
 document.getElementById('a_reg').onclick = () => acctSubmit('/api/auth/register');
 initAccount();
 
-async function loadRaces() {
-  const races = await (await fetch('/api/races')).json();
-  const tb = document.querySelector('#races tbody');
-  tb.innerHTML = '';
-  document.getElementById('norace').style.display = races.length ? 'none' : 'block';
-  for (const r of races) {
-    const tr = document.createElement('tr');
-    const st = new Date(r.start_time * 1000).toISOString().slice(0, 16).replace('T', ' ');
-    tr.innerHTML = `<td><a href="/race?id=${r.id}">${esc(r.name)}</a></td>
-      <td>${st}</td>
-      <td>${r.started ? '<span class="badge fin">racing</span>' : '<span class="badge virtual">pre-start</span>'}</td>
-      <td>${esc(r.polar_name)}</td><td>${Math.round(r.perf_factor * 100)}%</td>
-      <td>${r.virtual_boats}</td><td>${r.real_boats}</td>`;
-    tb.appendChild(tr);
-  }
+/* ---------------- race board: live map + standings ---------------- */
+let homeMap = null, courseLayer = null;
+const raceColors = ['#ff8a3d', '#7fa3bd', '#4cc38a', '#c792ea', '#eadd6f', '#f2555a'];
+
+function ensureMap() {
+  if (homeMap) return;
+  const el = document.getElementById('home_map');
+  el.style.display = 'block';
+  homeMap = L.map('home_map', { worldCopyJump: true, scrollWheelZoom: false })
+    .setView([40, -40], 3);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 12, className: 'dark-tiles',
+  }).addTo(homeMap);
+  courseLayer = L.layerGroup().addTo(homeMap);
+  new ResizeObserver(() => homeMap.invalidateSize()).observe(el);
 }
-function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+
+function until(ts) {
+  const s = ts - Date.now() / 1000;
+  if (s <= 0) return 'started';
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return d ? `in ${d}d ${h}h` : h ? `in ${h}h ${m}m` : `in ${m}m`;
+}
+
+async function loadRaces() {
+  const races = await (await fetch('/api/overview')).json();
+  const list = document.getElementById('race_list');
+  document.getElementById('norace').style.display = races.length ? 'none' : 'block';
+  list.innerHTML = '';
+  if (races.length) ensureMap();
+  if (courseLayer) courseLayer.clearLayers();
+  const bounds = [];
+
+  races.forEach((r, i) => {
+    const col = raceColors[i % raceColors.length];
+    if (homeMap && r.marks.length > 1) {
+      L.polyline(r.marks, { color: col, weight: 2, dashArray: '5 6', opacity: .9 })
+        .addTo(courseLayer)
+        .bindTooltip(`${esc(r.name)} — ${r.course_len_nm} nm`, { className: 'boat-label', sticky: true })
+        .on('click', () => location.href = `/race?id=${r.id}`);
+      r.marks.forEach(m => bounds.push(m));
+      (r.leaders || []).forEach(p =>
+        L.circleMarker(p, { radius: 4, color: '#101214', weight: 1, fillColor: col, fillOpacity: 1 })
+          .addTo(courseLayer));
+    }
+
+    const stamp = new Date(r.start_time * 1000).toISOString().slice(0, 16).replace('T', ' ');
+    const badge = r.status === 'racing' ? '<span class="badge fin">racing</span>'
+      : r.status === 'upcoming' ? '<span class="badge real">upcoming</span>'
+      : '<span class="badge virtual">finished</span>';
+    let body = '';
+    if (r.status === 'racing' && r.top.length) {
+      body = '<table class="list podium"><tbody>' + r.top.map((t, n) =>
+        `<tr><td>${n + 1}</td>
+         <td>${esc(t.name)}</td>
+         <td><span class="badge ${t.type}">${t.type}</span></td>
+         <td style="text-align:right">${t.finished ? 'finished' : t.dtf + ' nm to go'}</td></tr>`
+      ).join('') + '</tbody></table>';
+    } else if (r.status === 'upcoming') {
+      body = `<div class="small muted">Starts ${until(r.start_time)} — enter now, download the
+        course, polar and forecasts, and have your routing ready for the gun.</div>`;
+    } else if (r.top.length) {
+      body = `<div class="small muted">🏆 ${esc(r.top[0].name)} won · ${r.entries_total} boats</div>`;
+    }
+    list.insertAdjacentHTML('beforeend', `
+      <div class="race-item" style="border-left:3px solid ${col}">
+        <div class="race-item-head">
+          <a href="/race?id=${r.id}"><b>${esc(r.name)}</b></a> ${badge}
+          <span class="muted small">· ${r.course_len_nm} nm · ${esc(r.polar_name)} ·
+          ${r.entries_total} boat${r.entries_total === 1 ? '' : 's'} · start ${stamp}Z</span>
+        </div>
+        ${body}
+      </div>`);
+  });
+  if (homeMap && bounds.length)
+    homeMap.fitBounds(L.latLngBounds(bounds).pad(0.15));
+}
 
 document.getElementById('c_go').onclick = async () => {
   const msg = document.getElementById('c_msg');
@@ -353,6 +457,7 @@ document.getElementById('yb_go').onclick = async () => {
   } catch (e) { m.className = 'msg err'; m.textContent = e.message; }
 };
 loadRaces();
+setInterval(loadRaces, 120000);
 </script>
 </body>
 </html>

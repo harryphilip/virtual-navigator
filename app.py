@@ -325,6 +325,61 @@ def race_polar_text(race_id):
                              f'attachment; filename="race{race_id}_polar.pol"'})
 
 
+@app.get("/api/overview")
+def overview():
+    """Light snapshot for the home page: every race with its course line,
+    status, and a podium of the current standings (the ticker keeps the sim
+    fresh, so this reads straight from stored state)."""
+    db = get_db()
+    now = int(time.time())
+    out = []
+    for r in db.execute("SELECT * FROM races ORDER BY start_time DESC"):
+        marks = get_marks(db, r["id"])
+        course_len = dtf_nm(marks[0]["lat"], marks[0]["lon"], marks, 1) if len(marks) > 1 else 0
+        entries = []
+        for b in db.execute("SELECT * FROM boats WHERE race_id=?", (r["id"],)):
+            if b["sim_time"] is None:
+                continue
+            entries.append({
+                "name": b["name"], "type": "virtual",
+                "lat": b["lat"], "lon": b["lon"],
+                "finished_at": b["finished_at"],
+                "dtf": dtf_nm(b["lat"], b["lon"], marks, b["next_mark"])})
+        for rb in db.execute(
+                "SELECT * FROM real_boats WHERE race_id=? AND last_t IS NOT NULL",
+                (r["id"],)):
+            entries.append({
+                "name": rb["name"], "type": "real",
+                "lat": rb["last_lat"], "lon": rb["last_lon"],
+                "finished_at": rb["finished_at"],
+                "dtf": dtf_nm(rb["last_lat"], rb["last_lon"], marks, rb["next_mark"])})
+        entries.sort(key=lambda e: (0, e["finished_at"]) if e["finished_at"]
+                     else (1, e["dtf"]))
+        racing = [e for e in entries if not e["finished_at"]]
+        if now < r["start_time"]:
+            status = "upcoming"
+        elif entries and (not racing or now > r["start_time"] + 45 * 86400):
+            status = "finished"       # done, or dormant (retirees never finish)
+        else:
+            status = "racing"
+        out.append({
+            "id": r["id"], "name": r["name"], "description": r["description"],
+            "start_time": r["start_time"], "status": status,
+            "course_len_nm": round(course_len),
+            "polar_name": r["polar_name"],
+            "marks": [[m["lat"], m["lon"]] for m in marks],
+            "entries_total": len(entries),
+            "top": [{"name": e["name"], "type": e["type"],
+                     "dtf": round(e["dtf"]), "finished": bool(e["finished_at"])}
+                    for e in entries[:3]],
+            "leaders": [[e["lat"], e["lon"]] for e in entries[:5]
+                        if e["lat"] is not None and not e["finished_at"]],
+        })
+    order = {"racing": 0, "upcoming": 1, "finished": 2}
+    out.sort(key=lambda r: (order[r["status"]], r["start_time"]))
+    return jsonify(out)
+
+
 @app.get("/api/races/<int:race_id>/course.gpx")
 def race_course_gpx(race_id):
     """The race course as a GPX route — the starting point for your first
