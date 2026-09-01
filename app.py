@@ -1116,6 +1116,6 @@ if os.environ.get("VN_ENABLE_TICKER") == "1":
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("VN_PORT", 5170))
+    port = int(os.environ.get("VN_PORT") or os.environ.get("PORT") or 5170)
     start_ticker()
     app.run(host="127.0.0.1", port=port, debug=False, threaded=True)

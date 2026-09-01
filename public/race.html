@@ -5,13 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Race — Virtual Navigator</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header class="site">
-  <div class="logo"><a href="/" style="color:inherit">Virtual <span class="wave">~</span> Navigator</a></div>
+  <div class="logo"><a href="/" style="color:inherit"><svg viewBox="0 0 56 44" aria-hidden="true"><line x1="5" y1="2" x2="5" y2="42" stroke="currentColor" stroke-width="3"></line><path d="M8 4 L52 22 L8 40 Z" fill="#c8102e"></path><path d="M12 27 C 18 18, 24 18, 29 23 C 33 27, 37 26, 41 21" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path></svg><span>Virtual Navigator</span></a></div>
   <div class="sub" id="r_name">loading…</div>
   <div class="right"><span id="r_clock" class="clock"></span></div>
 </header>
@@ -146,7 +147,7 @@ let drawMode = false, drawWps = [];
 
 const map = L.map('map', { worldCopyJump: true }).setView([38, -60], 5);
 
-/* base layers: NOAA ENC chart (US waters) and a dark night mode.
+/* base layers: NOAA ENC chart (US waters) and plain OpenStreetMap.
    NOAA serves ENC rendering via an ArcGIS export endpoint, so each 256px
    tile is requested as a web-mercator export. */
 const ENC_BASE = 'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline'
@@ -162,43 +163,30 @@ const EncLayer = L.TileLayer.extend({
 });
 const chartLayer = new EncLayer('', { maxZoom: 15,
   attribution: 'NOAA ENC · not for navigation' });
-const darkLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors', maxZoom: 12, className: 'dark-tiles' });
+const osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors', maxZoom: 12 });
 const seamarks = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
   maxZoom: 18, attribution: 'OpenSeaMap' });
 
 let chartMode = true;
 chartLayer.addTo(map);
 document.getElementById('map').classList.add('chart-mode');
-L.control.layers({ 'NOAA chart': chartLayer, 'Night (dark)': darkLayer },
+L.control.layers({ 'NOAA chart': chartLayer, 'OpenStreetMap': osmLayer },
                  { 'Seamarks (OpenSeaMap)': seamarks }).addTo(map);
 map.on('baselayerchange', (e) => {
   chartMode = e.name === 'NOAA chart';
   document.getElementById('map').classList.toggle('chart-mode', chartMode);
-  redrawStyles();
 });
 function setBase(chart) {
   if (chart === chartMode) return;
   chartMode = chart;
   document.getElementById('map').classList.toggle('chart-mode', chart);
-  if (chart) { map.removeLayer(darkLayer); chartLayer.addTo(map); }
-  else { map.removeLayer(chartLayer); darkLayer.addTo(map); }
-  redrawStyles();
+  if (chart) { map.removeLayer(osmLayer); chartLayer.addTo(map); }
+  else { map.removeLayer(chartLayer); osmLayer.addTo(map); }
 }
-function redrawStyles() {
-  if (race) drawCourse();
-  if (state) drawFleet();
-  if (my) refreshMine().catch(() => {});
-  updateDrawUi();
-}
-/* per-mode drawing colors — chart mode uses saturated inks that read on
-   the light ENC background; the course goes chart-magenta like a plotted
-   route */
-function uiColors() {
-  return chartMode
-    ? { course: '#c2185b', mark: '#ad1457', plan: '#1864ab', draw: '#b08900' }
-    : { course: '#8aa7bc', mark: '#ffb84d', plan: '#35c4dc', draw: '#eadd6f' };
-}
+/* drawing colors — saturated inks that read on the light chart bases;
+   the course goes chart-magenta like a plotted route */
+const COLORS = { course: '#c2185b', mark: '#ad1457', plan: '#1864ab', draw: '#b08900' };
 const courseLayer = L.layerGroup().addTo(map);
 const fleetLayer = L.layerGroup().addTo(map);
 const planLayer = L.layerGroup().addTo(map);
@@ -231,7 +219,7 @@ async function loadRace() {
   loadDocs();
   const pts = race.marks.map(m => [m.lat, m.lon]);
   courseBounds = L.latLngBounds(pts).pad(0.25);
-  // ENC coverage is US waters — start foreign courses on the dark base
+  // ENC coverage is US waters — start foreign courses on the OSM base
   const ctr = courseBounds.getCenter();
   setBase(ctr.lng > -130 && ctr.lng < -60 && ctr.lat > 15 && ctr.lat < 50);
   drawCourse();
@@ -240,7 +228,7 @@ async function loadRace() {
 
 function drawCourse() {
   if (!race) return;
-  const col = uiColors();
+  const col = COLORS;
   courseLayer.clearLayers();
   const pts = race.marks.map(m => [m.lat, m.lon]);
   L.polyline(pts, { color: col.course, weight: 1.5, dashArray: '6 6', opacity: .85 }).addTo(courseLayer);
@@ -268,12 +256,10 @@ new ResizeObserver(() => {
   if (!userMoved) fitCourse();
 }).observe(document.getElementById('map'));
 
-const paletteDark = ['#35c4dc', '#5dd39e', '#c792ea', '#82aaff', '#f78c6c', '#eadd6f', '#ff9ecb', '#7fdbca'];
-const paletteChart = ['#1864ab', '#2b8a3e', '#9c36b5', '#0b7285', '#d9480f', '#5f3dc4', '#c2255c', '#087f5b'];
+const palette = ['#1864ab', '#2b8a3e', '#9c36b5', '#0b7285', '#d9480f', '#5f3dc4', '#c2255c', '#087f5b'];
 function colorFor(e, i) {
-  if (e.type === 'real') return chartMode ? '#e8590c' : '#ffb84d';
-  const p = chartMode ? paletteChart : paletteDark;
-  return p[i % p.length];
+  if (e.type === 'real') return '#e8590c';
+  return palette[i % palette.length];
 }
 
 async function refresh() {
@@ -293,9 +279,9 @@ function drawFleet() {
     if (e.lat != null) {
       const mk = e.type === 'real'
         ? L.marker([e.lat, e.lon], { icon: L.divIcon({ className: '', html:
-            `<div style="width:11px;height:11px;background:${c};transform:rotate(45deg);border:1.5px solid #0b1620"></div>`,
+            `<div style="width:11px;height:11px;background:${c};transform:rotate(45deg);border:1.5px solid #101418"></div>`,
             iconSize: [11, 11], iconAnchor: [5, 5] }) })
-        : L.circleMarker([e.lat, e.lon], { radius: 5.5, color: '#0b1620', weight: 1.5, fillColor: c, fillOpacity: 1 });
+        : L.circleMarker([e.lat, e.lon], { radius: 5.5, color: '#101418', weight: 1.5, fillColor: c, fillOpacity: 1 });
       mk.addTo(fleetLayer).bindTooltip(
         `${esc(e.name)} · ${fmt1(e.sog)} kn · ${Math.round(e.dtf)} nm to go`,
         { className: 'boat-label', direction: 'top', offset: [0, -8] });
@@ -438,7 +424,7 @@ async function refreshMine() {
       ` · sailed through ${when(b.sim_time)} UTC (locked)`;
   }
   planLayer.clearLayers();
-  const planCol = uiColors().plan;
+  const planCol = COLORS.plan;
   if (b.route.length && b.lat != null) {
     L.polyline([[b.lat, b.lon], ...b.route],
       { color: planCol, weight: 2, dashArray: '3 6', opacity: .9 }).addTo(planLayer);
@@ -510,7 +496,7 @@ map.on('click', (ev) => {
 function updateDrawUi() {
   document.getElementById('mb_wp_n').textContent = drawWps.length + ' waypoints';
   drawLayer.clearLayers();
-  const drawCol = uiColors().draw;
+  const drawCol = COLORS.draw;
   if (drawWps.length) {
     L.polyline(drawWps, { color: drawCol, weight: 2 }).addTo(drawLayer);
     drawWps.forEach(w => L.circleMarker(w, { radius: 3.5, color: drawCol, fillOpacity: 1 }).addTo(drawLayer));

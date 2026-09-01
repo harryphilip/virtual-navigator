@@ -5,7 +5,8 @@
       "name": "virtual-navigator",
       "runtimeExecutable": ".venv/bin/python",
       "runtimeArgs": ["app.py"],
-      "port": 5170
+      "port": 5170,
+      "autoPort": true
     }
   ]
 }

@@ -37,8 +37,12 @@ header.site {
 header.site .logo {
   font-size: 15px; font-weight: 800;
   letter-spacing: .1em; text-transform: uppercase;
+  display: flex; align-items: center; gap: 9px;
 }
-header.site .logo .wave { color: var(--accent); }
+header.site .logo a { display: flex; align-items: center; gap: 9px; }
+header.site .logo a:hover { text-decoration: none; }
+header.site .logo svg { display: block; width: 30px; height: 24px; }
+header.site { align-items: center; }
 header.site .sub { color: var(--muted); font-size: 12.5px; }
 header.site .right {
   margin-left: auto; color: var(--muted);
@@ -198,7 +202,6 @@ button:disabled { opacity: .4; cursor: default; }
 
 /* ---- map furniture ------------------------------------------------------------ */
 .leaflet-container { font: inherit; }
-.dark-tiles { filter: invert(1) hue-rotate(180deg) saturate(.15) brightness(.78) contrast(.95); }
 .boat-label {
   background: #ffffffee; border: 1px solid var(--border); color: var(--text);
   border-radius: 0; padding: 0 6px; font-size: 11px;
