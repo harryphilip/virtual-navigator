@@ -43,20 +43,28 @@ def main():
     if not r:
         print(f"no race with id {race_id}")
         sys.exit(1)
+    # boats waiting on the line have sim_time == start_time (set at first
+    # routing, never advanced before the gun); anything beyond that has
+    # actually sailed and the gun can no longer move
     sailing = db.execute(
-        "SELECT COUNT(*) c FROM boats WHERE race_id=? AND sim_time IS NOT NULL",
-        (race_id,)).fetchone()["c"]
+        "SELECT COUNT(*) c FROM boats WHERE race_id=? AND sim_time>?",
+        (race_id, r["start_time"])).fetchone()["c"]
     if sailing:
         print(f"refusing: {sailing} virtual boat(s) already sailing this race")
         sys.exit(1)
 
     old = dt.datetime.fromtimestamp(r["start_time"], dt.timezone.utc)
+    now = int(dt.datetime.now(dt.timezone.utc).timestamp())
     db.execute("UPDATE races SET start_time=? WHERE id=?", (start, race_id))
+    moored = db.execute(
+        "UPDATE boats SET sim_time=? WHERE race_id=? AND sim_time IS NOT NULL",
+        (max(start, now), race_id)).rowcount
     if repl:
         db.execute("UPDATE races SET description=replace(description,?,?) "
                    "WHERE id=?", (repl[0], repl[1], race_id))
     db.commit()
     print(f"{r['name']}: start {old:%Y-%m-%d %H:%M}Z -> {when:%Y-%m-%d %H:%M}Z"
+          + f", {moored} boat(s) re-anchored to the new gun"
           + (" (description updated)" if repl else ""))
 
 
