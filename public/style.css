@@ -1,40 +1,42 @@
 :root {
-  --bg: #101214;
-  --panel: #16181b;
-  --panel2: #1b1e22;
-  --line: #23262a;
-  --border: #2a2e33;
-  --text: #e8eaed;
-  --muted: #969da6;
-  --accent: #ff8a3d;          /* signal orange — the one loud thing */
-  --accent-dim: #ff8a3d22;
-  --steel: #7fa3bd;           /* quiet steel for secondary badges */
-  --good: #4cc38a;
-  --bad: #f2555a;
-  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --panel2: #fafafa;
+  --line: #e3e4e6;            /* light hairline: table rows, quiet rules */
+  --border: #101418;          /* structural rules are ink */
+  --text: #101418;
+  --muted: #4c545c;
+  --faint: #8a9096;
+  --accent: #c8102e;          /* signal red — the one loud thing */
+  --accent-dim: #c8102e14;
+  --steel: #35708e;           /* quiet steel for virtual-fleet marks */
+  --good: #1a7a4a;
+  --bad: #c8102e;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
   background: var(--bg);
   color: var(--text);
-  font: 14.5px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font: 14.5px/1.55 "Archivo", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-h1, h2, h3 { font-weight: 650; }
+a:hover { color: #97001c; text-decoration: underline; }
+h1, h2, h3 { font-weight: 700; }
 
-/* ---- header: flat instrument bar ---------------------------------------- */
+/* ---- header: program masthead ------------------------------------------- */
 header.site {
   display: flex; align-items: baseline; gap: 16px;
-  padding: 13px 22px;
-  background: #0c0e10;
-  border-bottom: 1px solid var(--border);
+  padding: 14px 22px;
+  background: var(--bg);
+  border-bottom: 2px solid var(--border);
 }
 header.site .logo {
   font-size: 15px; font-weight: 800;
-  letter-spacing: .14em; text-transform: uppercase;
+  letter-spacing: .1em; text-transform: uppercase;
 }
 header.site .logo .wave { color: var(--accent); }
 header.site .sub { color: var(--muted); font-size: 12.5px; }
@@ -46,72 +48,68 @@ header.site .right {
 .wrap { max-width: 1080px; margin: 0 auto; padding: 26px 22px 70px; }
 
 /* ---- home hero ----------------------------------------------------------- */
-.hero { padding: 34px 4px 26px; }
+.hero { padding: 40px 4px 30px; }
 .hero h1 {
-  margin: 0 0 10px; font-size: 30px; line-height: 1.2;
-  letter-spacing: -.01em; max-width: 620px;
+  margin: 0 0 12px; font-size: 34px; line-height: 1.08;
+  font-weight: 800; text-transform: uppercase; letter-spacing: .005em;
+  max-width: 680px;
 }
 .hero .lead { margin: 0; max-width: 640px; color: var(--muted); font-size: 15.5px; }
 .hero .lead b, .hero .lead i { color: var(--text); }
 .hero-tiles {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
-  margin-top: 22px; font-size: 13px; color: var(--muted);
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
+  margin-top: 24px; font-size: 13px; color: var(--muted);
+  border: 1px solid var(--border);
 }
-.hero-tiles > div {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 13px 15px;
-}
+.hero-tiles > div { padding: 14px 16px; }
+.hero-tiles > div + div { border-left: 1px solid var(--border); }
 .hero-tiles b { color: var(--text); }
-@media (max-width: 760px) { .hero-tiles { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .hero-tiles { grid-template-columns: 1fr; }
+  .hero-tiles > div + div { border-left: 0; border-top: 1px solid var(--border); }
+}
 
 /* ---- home race board ------------------------------------------------------ */
 #home_map {
-  height: 360px; border: 1px solid var(--border); border-radius: 8px;
-  background: #14161a; margin-bottom: 14px;
+  height: 360px; border: 1px solid var(--border);
+  background: #eef1f3; margin-bottom: 14px;
 }
 .race-item {
-  padding: 10px 14px; margin-bottom: 10px;
-  background: var(--panel2); border: 1px solid var(--line); border-radius: 6px;
+  padding: 11px 14px; margin-bottom: 10px;
+  background: var(--bg); border: 1px solid var(--border);
 }
 .race-item-head { margin-bottom: 4px; }
 table.podium { margin-top: 4px; }
 table.podium td { padding: 3px 8px; border-bottom: none; font-size: 13px; }
 
-/* ---- cards: hairline panels with micro-cap labels ----------------------- */
+/* ---- cards ---------------------------------------------------------------- */
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
   padding: 18px 20px;
   margin-bottom: 16px;
 }
 .card h2 {
-  margin: 0 0 12px;
+  margin: -18px -20px 14px;
+  padding: 9px 20px;
   font-size: 11.5px;
-  letter-spacing: .12em;
+  letter-spacing: .14em;
   text-transform: uppercase;
-  color: var(--muted);
-}
-.card h2::before {
-  content: "";
-  display: inline-block;
-  width: 14px; height: 2px;
-  background: var(--accent);
-  margin-right: 8px;
-  vertical-align: 3px;
+  font-weight: 800;
+  border-bottom: 1px solid var(--border);
 }
 .card h3 {
   margin: 16px 0 6px;
   font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--muted);
+  font-weight: 700; color: var(--muted);
 }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 
-/* ---- tables ------------------------------------------------------------- */
+/* ---- tables ---------------------------------------------------------------- */
 table.list { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 table.list th {
-  text-align: left; color: var(--muted); font-weight: 600;
+  text-align: left; color: var(--faint); font-weight: 700;
   font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
   padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
 }
@@ -119,37 +117,38 @@ table.list td {
   padding: 7px 10px; border-bottom: 1px solid var(--line);
   font-variant-numeric: tabular-nums;
 }
-table.list tr:hover td { background: #ffffff06; }
+table.list tr:hover td { background: #10141806; }
 
-/* ---- forms -------------------------------------------------------------- */
+/* ---- forms ----------------------------------------------------------------- */
 input, textarea, select {
-  background: #0c0e10; color: var(--text);
-  border: 1px solid var(--border); border-radius: 5px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid #b6babe; border-radius: 0;
   padding: 7px 10px; font: inherit; width: 100%;
 }
 input:focus, textarea:focus {
-  outline: none; border-color: var(--accent);
+  outline: none; border-color: var(--border);
   box-shadow: 0 0 0 2px var(--accent-dim);
 }
 textarea { font-family: var(--mono); font-size: 12px; }
 label {
   display: block; margin: 10px 0 4px;
   font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--muted);
+  font-weight: 700; color: var(--muted);
 }
 button {
-  background: var(--accent); color: #16181b;
-  border: 1px solid var(--accent); border-radius: 5px;
-  padding: 8px 15px; font: inherit; font-size: 13.5px;
-  font-weight: 650; cursor: pointer;
+  background: var(--accent); color: #ffffff;
+  border: 1.5px solid var(--accent); border-radius: 0;
+  padding: 8px 16px; font: inherit; font-size: 12.5px;
+  font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  cursor: pointer;
 }
-button:hover { filter: brightness(1.08); }
+button:hover { background: #a30d25; border-color: #a30d25; }
 button.ghost {
   background: transparent; color: var(--text);
-  border: 1px solid #3a3f45;
+  border: 1.5px solid var(--border);
 }
-button.ghost:hover { border-color: var(--accent); color: var(--accent); filter: none; }
-button.warn { background: var(--bad); border-color: var(--bad); color: #fff; }
+button.ghost:hover { background: var(--text); color: #ffffff; }
+button.warn { background: var(--bad); border-color: var(--bad); }
 button:disabled { opacity: .4; cursor: default; }
 .row { display: flex; gap: 10px; }
 .row > * { flex: 1; }
@@ -157,29 +156,30 @@ button:disabled { opacity: .4; cursor: default; }
 .msg.ok { color: var(--good); }
 .msg.err { color: var(--bad); }
 
-/* ---- badges ------------------------------------------------------------- */
+/* ---- badges ----------------------------------------------------------------- */
 .badge {
-  display: inline-block; padding: 1px 7px; border-radius: 3px;
-  font-size: 10.5px; font-weight: 650; letter-spacing: .05em;
+  display: inline-block; padding: 1px 7px; border-radius: 0;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
   text-transform: uppercase; vertical-align: 1px;
-  border: 1px solid transparent;
+  border: 1px solid currentColor;
 }
-.badge.virtual { color: var(--steel); border-color: #7fa3bd44; }
-.badge.real { color: var(--accent); border-color: #ff8a3d55; }
-.badge.fin { color: var(--good); border-color: #4cc38a44; }
+.badge.virtual { color: var(--steel); }
+.badge.real { color: var(--accent); }
+.badge.fin { color: var(--good); }
 
-/* ---- race page layout ---------------------------------------------------- */
+/* ---- race page layout -------------------------------------------------------- */
 .race-grid {
   display: grid; grid-template-columns: 1fr 400px;
-  gap: 0; height: calc(100vh - 51px);
+  gap: 0; height: calc(100vh - 53px);
 }
-#map { height: 100%; background: #14161a; }
+#map { height: 100%; background: #eef1f3; }
 #map.chart-mode { background: #c7d9e3; }   /* ENC water tint while tiles load */
 .side {
-  overflow-y: auto; border-left: 1px solid var(--border);
+  overflow-y: auto; border-left: 2px solid var(--border);
   padding: 14px 16px 40px; background: var(--bg);
 }
 .side .card { background: var(--panel); padding: 14px 16px; }
+.side .card h2 { margin: -14px -16px 12px; padding: 8px 16px; }
 @media (max-width: 900px) {
   .race-grid { grid-template-columns: 1fr; height: auto; }
   #map { height: 52vh; }
@@ -189,27 +189,28 @@ button:disabled { opacity: .4; cursor: default; }
 .lb-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .lb-filters button {
   background: transparent; color: var(--muted);
-  border: 1px solid var(--border); border-radius: 4px;
-  padding: 3px 9px; font-size: 11.5px; font-weight: 600;
-  letter-spacing: .04em;
+  border: 1px solid #b6babe; border-radius: 0;
+  padding: 3px 9px; font-size: 11px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
 }
+.lb-filters button:hover { background: transparent; color: var(--text); border-color: var(--border); }
 .lb-filters button.on { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 
-/* ---- map furniture -------------------------------------------------------- */
+/* ---- map furniture ------------------------------------------------------------ */
 .leaflet-container { font: inherit; }
 .dark-tiles { filter: invert(1) hue-rotate(180deg) saturate(.15) brightness(.78) contrast(.95); }
 .boat-label {
-  background: #0c0e10e6; border: 1px solid var(--border); color: var(--text);
-  border-radius: 4px; padding: 0 6px; font-size: 11px;
+  background: #ffffffee; border: 1px solid var(--border); color: var(--text);
+  border-radius: 0; padding: 0 6px; font-size: 11px;
   font-family: var(--mono); white-space: nowrap; box-shadow: none;
 }
 .boat-label::before { display: none; }
 
-/* ---- data text ----------------------------------------------------------- */
+/* ---- data text ------------------------------------------------------------------ */
 code, pre {
   font-family: var(--mono);
-  background: #0c0e10; border: 1px solid var(--line);
-  border-radius: 4px; padding: 1px 6px; font-size: 12.5px;
+  background: #f4f4f2; border: 1px solid var(--line);
+  border-radius: 0; padding: 1px 6px; font-size: 12.5px;
 }
 pre { padding: 10px 12px; overflow-x: auto; }
 .clock { font-family: var(--mono); font-size: 12.5px; color: var(--text); }

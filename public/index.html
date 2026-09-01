@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Virtual Navigator</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -282,7 +284,7 @@ initAccount();
 
 /* ---------------- race board: live map + standings ---------------- */
 let homeMap = null, courseLayer = null;
-const raceColors = ['#ff8a3d', '#7fa3bd', '#4cc38a', '#c792ea', '#eadd6f', '#f2555a'];
+const raceColors = ['#c8102e', '#101418', '#1a7a4a', '#35708e', '#b8860b', '#c05299'];
 
 function ensureMap() {
   if (homeMap) return;
@@ -291,7 +293,7 @@ function ensureMap() {
   homeMap = L.map('home_map', { worldCopyJump: true, scrollWheelZoom: false })
     .setView([40, -40], 3);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors', maxZoom: 12, className: 'dark-tiles',
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 12,
   }).addTo(homeMap);
   courseLayer = L.layerGroup().addTo(homeMap);
   new ResizeObserver(() => homeMap.invalidateSize()).observe(el);
