@@ -947,9 +947,11 @@ def link_yb(race_id):
     """Link a YB Tracking race: import the fleet roster and full track history,
     then let the background poller keep positions fresh.
 
-    Body: {admin_key, slug, model_filter?} — model_filter keeps only boats
-    whose model string contains the given text (case-insensitive), e.g. to
-    import just the class that sails your polar.
+    Body: {admin_key, slug, model_filter?, exclude?} — model_filter keeps only
+    boats whose model string contains the given text (case-insensitive), e.g.
+    to import just the class that sails your polar; exclude drops boats whose
+    name contains any of the given comma-separated substrings (backup trackers,
+    spares: "secondary,zz_").
     """
     db = get_db()
     d = request.get_json(force=True)
@@ -964,8 +966,11 @@ def link_yb(race_id):
     except Exception as e:
         return _err(f"could not read yb.tl/{slug}: {e}", 502)
     flt = (d.get("model_filter") or "").strip().lower()
+    excl = [s.strip().lower()
+            for s in (d.get("exclude") or "").split(",") if s.strip()]
     teams = [t for t in setup["teams"]
-             if not flt or flt in t["model"].lower()]
+             if (not flt or flt in t["model"].lower())
+             and not any(x in t["name"].lower() for x in excl)]
     if not teams:
         return _err("no teams matched", 404)
 
