@@ -6,17 +6,19 @@ On Fly:  fly ssh console -C "python /app/scripts/restart_boat.py 3 Magpie"
 
 Wipes the boat's sailed track and counters, re-arms its full submitted
 routing, reconciles it against the current course from the start mark
-(the same soft join a mid-race resubmission gets), and re-anchors the
-boat on the line at the gun.  The next tick replays the race so far
-through the same cached weather — deterministic, nothing invented.
-Route submission history is kept.
+(the same soft join a mid-race resubmission gets), detours the result
+around any exclusion zones (the join itself can create a crossing leg),
+and re-anchors the boat on the line at the gun.  The next tick replays
+the race so far through the same cached weather — deterministic, nothing
+invented.  Route submission history is kept.
 """
 import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from vn.db import get_db
-from vn.sim import enforce_course, get_marks
+from vn.detour import route_around_zones
+from vn.sim import enforce_course, get_marks, race_zones
 
 
 def main():
@@ -39,6 +41,15 @@ def main():
         "SELECT lat,lon FROM route_wps WHERE boat_id=? ORDER BY seq", (b["id"],))]
     start = (marks[0]["lat"], marks[0]["lon"])
     wps, notes = enforce_course(wps, marks, 1, race["mark_radius_nm"], start)
+    zones = race_zones(race)
+    if zones:
+        wps, touched = route_around_zones([start] + wps, zones)
+        wps = wps[1:]                     # the line itself stays the anchor
+        for zname, cut, ins in touched:
+            notes.append("⛔ routing still brushes a zone — check the map"
+                         if zname == "!unresolved" else
+                         f"⛔ {zname}: {cut} waypoint(s) detoured via "
+                         f"{ins} boundary point(s)")
     db.execute("DELETE FROM route_wps WHERE boat_id=?", (b["id"],))
     db.executemany("INSERT INTO route_wps(boat_id,seq,lat,lon) VALUES (?,?,?,?)",
                    [(b["id"], i, la, lo) for i, (la, lo) in enumerate(wps)])
