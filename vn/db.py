@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS races (
   currents_enabled INTEGER DEFAULT 1,
   yb_slug TEXT DEFAULT '',              -- linked YB tracker race, if any
   grounding_depth_ft REAL DEFAULT 15,   -- shallower than this: 50% speed
-  created_by INTEGER                    -- users.id of the creating admin
+  created_by INTEGER,                   -- users.id of the creating admin
+  zones_json TEXT DEFAULT '[]'          -- exclusion zones [{name, pts:[[lat,lon],..]}]
 );
 CREATE TABLE IF NOT EXISTS marks (
   race_id INTEGER NOT NULL,
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS boats (
   wind_side INTEGER,                    -- tack the boat is on (+1/-1)
   maneuvers INTEGER DEFAULT 0,          -- tacks + gybes so far
   groundings INTEGER DEFAULT 0,         -- sim steps spent in shallow water
+  zone_steps INTEGER DEFAULT 0,         -- sim steps spent in exclusion zones
   owner_id INTEGER,                     -- users.id; legacy PIN boats until claimed
   UNIQUE (race_id, name)
 );
@@ -152,6 +154,8 @@ MIGRATIONS = [
     "ALTER TABLE real_boats ADD COLUMN sog REAL",
     "ALTER TABLE real_boats ADD COLUMN next_mark INTEGER DEFAULT 1",
     "ALTER TABLE real_boats ADD COLUMN finished_at INTEGER",
+    "ALTER TABLE races ADD COLUMN zones_json TEXT DEFAULT '[]'",
+    "ALTER TABLE boats ADD COLUMN zone_steps INTEGER DEFAULT 0",
 ]
 
 

@@ -22,7 +22,8 @@ from vn.nor import extract_race, MAX_DOC_BYTES
 from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to_gpx
 from vn.polar import Polar
 from vn.realfleet import ingest_points, recompute
-from vn.sim import catch_up_race, dtf_nm, enforce_course, get_marks, race_polar
+from vn.sim import (catch_up_race, dtf_nm, enforce_course, get_marks,
+                    race_polar, race_zones)
 
 app = Flask(__name__, static_folder="public", static_url_path="")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)   # Fly's TLS proxy
@@ -311,6 +312,7 @@ def race_detail(race_id):
                     "maneuver_penalty_s": r["maneuver_penalty_s"],
                     "currents_enabled": bool(r["currents_enabled"]),
                     "grounding_depth_ft": r["grounding_depth_ft"],
+                    "zones": race_zones(r),
                     "yb_slug": r["yb_slug"] or ""})
 
 
@@ -796,6 +798,7 @@ def boat_detail(boat_id):
         "sim_time": b["sim_time"], "lat": b["lat"], "lon": b["lon"],
         "finished_at": b["finished_at"], "maneuvers": b["maneuvers"] or 0,
         "groundings": b["groundings"] or 0,
+        "zone_steps": b["zone_steps"] or 0,
         "dtf": dtf_nm(b["lat"], b["lon"], marks, b["next_mark"]) if b["lat"] is not None else None,
         "route": [[w["lat"], w["lon"]] for w in wps],
         "track": [dict(p) for p in _decimate(trk)],

@@ -8,11 +8,12 @@ reachable, at realistic VMG cost).  Time only moves forward: each boat's state
 is advanced lazily to "now", written to an immutable track, and route updates
 can only replace waypoints not yet reached.
 """
+import json
 import threading
 import time
 
 from .depth import get_depth_ft
-from .geo import angle_diff, haversine_nm, bearing_deg, destination
+from .geo import angle_diff, haversine_nm, bearing_deg, destination, point_in_poly
 from .polar import Polar
 from .wind import get_wind, get_current
 
@@ -41,15 +42,24 @@ def catch_up_race(db, race_id, now=None):
             return
         polar = race_polar(race)
         marks = get_marks(db, race_id)
+        zones = race_zones(race)
         boats = db.execute(
             "SELECT * FROM boats WHERE race_id=? AND sim_time IS NOT NULL",
             (race_id,)).fetchall()
         for boat in boats:
-            _advance(db, race, polar, marks, boat, now)
+            _advance(db, race, polar, marks, zones, boat, now)
         db.commit()
 
 
-def _advance(db, race, polar, marks, boat, until):
+def race_zones(race):
+    """Exclusion zone polygons for a race row: [{'name', 'pts'}]."""
+    try:
+        return json.loads(race["zones_json"] or "[]")
+    except (KeyError, IndexError, ValueError):
+        return []
+
+
+def _advance(db, race, polar, marks, zones, boat, until):
     if boat["finished_at"] is not None:
         return
     step = race["step_minutes"] * 60
@@ -62,6 +72,7 @@ def _advance(db, race, polar, marks, boat, until):
     side = boat["wind_side"]              # +1 wind over starboard, -1 port
     maneuvers = boat["maneuvers"] or 0
     groundings = boat["groundings"] or 0
+    zone_steps = boat["zone_steps"] or 0
     penalty_h = (race["maneuver_penalty_s"] or 0.0) / 3600.0
     use_current = bool(race["currents_enabled"])
     min_depth_ft = race["grounding_depth_ft"] or 0.0
@@ -80,9 +91,14 @@ def _advance(db, race, polar, marks, boat, until):
         # grounding: in less water than the race minimum the boat drags
         # through at half speed for the step — slow, never disqualified
         aground = min_depth_ft > 0 and get_depth_ft(db, lat, lon) < min_depth_ft
-        speed_scale = 0.5 if aground else 1.0
+        # exclusion zones (TSS, ice, wildlife) cost the same drag: the SIs
+        # say keep out, the game makes inside slower than around
+        in_zone = any(point_in_poly(lat, lon, z["pts"]) for z in zones)
+        speed_scale = 0.5 if (aground or in_zone) else 1.0
         if aground:
             groundings += 1
+        if in_zone:
+            zone_steps += 1
 
         if wps:
             # sail toward the next routing waypoint, possibly reaching
@@ -154,8 +170,9 @@ def _advance(db, race, polar, marks, boat, until):
             (boat["id"], max(passed_wps)))
     db.execute(
         "UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=?, finished_at=?, "
-        "wind_side=?, maneuvers=?, groundings=? WHERE id=?",
-        (t, lat, lon, next_mark, finished, side, maneuvers, groundings, boat["id"]))
+        "wind_side=?, maneuvers=?, groundings=?, zone_steps=? WHERE id=?",
+        (t, lat, lon, next_mark, finished, side, maneuvers, groundings,
+         zone_steps, boat["id"]))
 
 
 def enforce_course(wps, marks, next_mark, radius_nm, start_pos=None, cog=None):

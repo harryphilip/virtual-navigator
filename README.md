@@ -46,6 +46,12 @@ through real historical wind. Demo boats use PIN `0000`; the demo admin key is
   half speed. Shave the beach at your peril; steps spent aground show in
   your boat panel. Patches narrower than one sim step can be hopped over —
   it's a game, not a chart audit.
+- **Exclusion zones drag like shoals.** Races can carry keep-out polygons
+  (TSS boxes, ice limits, wildlife zones — importable straight from the
+  linked YB tracker's course drawing). They're drawn red on the race map,
+  and a virtual boat caught inside sails at half speed, same rule as
+  grounding: inside is always slower than around. Steps spent in a zone
+  show in your boat panel.
 - **Soft course enforcement — no cheating, no DSQ.** Routings from your own
   software rarely land exactly on the race's marks. On submission the
   committee reconciles them: waypoints you're already standing on are

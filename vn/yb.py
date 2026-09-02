@@ -32,6 +32,25 @@ def race_setup(slug):
     return {"title": d.get("title", slug), "teams": teams}
 
 
+def zones(slug):
+    """Keep-out polygons drawn on a YB race: [{'name', 'pts': [[lat, lon], ..]}].
+
+    YB's RaceSetup carries them as poi lines flagged polygon=true (exclusion
+    zones, TSS boxes, ice limits); plain lines (start/finish) are skipped.
+    """
+    raw = _get(f"{BASE}/JSON/{slug}/RaceSetup")
+    d = json.loads(raw.decode("utf-8", errors="replace"))
+    out = []
+    for line in d.get("poi", {}).get("lines", []):
+        if not line.get("polygon"):
+            continue
+        nums = [float(x) for x in (line.get("nodes") or "").split(",") if x]
+        pts = [[nums[i], nums[i + 1]] for i in range(0, len(nums) - 1, 2)]
+        if len(pts) >= 3:
+            out.append({"name": (line.get("name") or "zone").strip(), "pts": pts})
+    return out
+
+
 def positions(slug, latest_only=False):
     """{yb_team_id: [(t_unix, lat, lon), ...]} sorted oldest→newest."""
     name = "LatestPositions3" if latest_only else "AllPositions3"

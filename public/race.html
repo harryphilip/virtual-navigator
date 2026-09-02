@@ -186,7 +186,7 @@ function setBase(chart) {
 }
 /* drawing colors — saturated inks that read on the light chart bases;
    the course goes chart-magenta like a plotted route */
-const COLORS = { course: '#c2185b', mark: '#ad1457', plan: '#1864ab', draw: '#b08900' };
+const COLORS = { course: '#c2185b', mark: '#ad1457', plan: '#1864ab', draw: '#b08900', zone: '#c62828' };
 const courseLayer = L.layerGroup().addTo(map);
 const fleetLayer = L.layerGroup().addTo(map);
 const planLayer = L.layerGroup().addTo(map);
@@ -238,6 +238,15 @@ function drawCourse() {
     }).addTo(courseLayer).bindTooltip(
       `${i === 0 ? '⚑ ' : i === race.marks.length - 1 ? '🏁 ' : ''}${esc(m.name)}`,
       { className: 'boat-label', permanent: false });
+  });
+  // exclusion zones — keep out or sail at half speed
+  (race.zones || []).forEach(z => {
+    L.polygon(z.pts, {
+      color: col.zone, weight: 1.5, dashArray: '4 4', opacity: .8,
+      fillColor: col.zone, fillOpacity: .08,
+    }).addTo(courseLayer).bindTooltip(
+      `⛔ ${esc(z.name)} — half speed inside`,
+      { className: 'boat-label', sticky: true });
   });
 }
 let courseBounds = null;
@@ -421,6 +430,7 @@ async function refreshMine() {
     st.innerHTML = `<b>${esc(b.name)}</b> — ${b.dtf == null ? '' : Math.round(b.dtf) + ' nm to go · '}` +
       `${b.maneuvers} tacks/gybes` +
       (b.groundings ? ` · <span style="color:var(--bad)">⚠ ${b.groundings} step(s) aground</span>` : '') +
+      (b.zone_steps ? ` · <span style="color:var(--bad)">⛔ ${b.zone_steps} step(s) in exclusion zones</span>` : '') +
       ` · sailed through ${when(b.sim_time)} UTC (locked)`;
   }
   planLayer.clearLayers();

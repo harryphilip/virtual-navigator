@@ -54,11 +54,13 @@ def main():
         sys.exit(1)
 
     old = dt.datetime.fromtimestamp(r["start_time"], dt.timezone.utc)
-    now = int(dt.datetime.now(dt.timezone.utc).timestamp())
+    # a gun in the past is fine: the engine replays the missed hours through
+    # real (cached) historical weather on the next tick, exactly like the
+    # demo race — routings on file predate the gun either way
     db.execute("UPDATE races SET start_time=? WHERE id=?", (start, race_id))
     moored = db.execute(
         "UPDATE boats SET sim_time=? WHERE race_id=? AND sim_time IS NOT NULL",
-        (max(start, now), race_id)).rowcount
+        (start, race_id)).rowcount
     if repl:
         db.execute("UPDATE races SET description=replace(description,?,?) "
                    "WHERE id=?", (repl[0], repl[1], race_id))

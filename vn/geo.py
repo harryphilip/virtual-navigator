@@ -34,3 +34,22 @@ def destination(lat, lon, bearing, dist_nm):
 def angle_diff(a, b):
     """Smallest absolute difference between two bearings, 0..180."""
     return abs(((a - b + 540.0) % 360.0) - 180.0)
+
+
+def point_in_poly(lat, lon, pts):
+    """Ray-cast point-in-polygon on plain lat/lon vertices [(lat, lon), ...].
+
+    Edges are treated as straight lines in lat/lon space — the same shapes a
+    race viewer draws — which is plenty for keep-out zones tens of miles
+    across (and none of ours straddle the antimeridian).
+    """
+    inside = False
+    n = len(pts)
+    for i in range(n):
+        la1, lo1 = pts[i][0], pts[i][1]
+        la2, lo2 = pts[(i + 1) % n][0], pts[(i + 1) % n][1]
+        if (la1 > lat) != (la2 > lat):
+            x = lo1 + (lat - la1) * (lo2 - lo1) / (la2 - la1)
+            if lon < x:
+                inside = not inside
+    return inside
