@@ -12,7 +12,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from vn.db import get_db
+from vn.db import add_race_log, get_db
 
 
 def main():
@@ -30,6 +30,9 @@ def main():
     name = sys.argv[5] if len(sys.argv) == 6 else m["name"]
     db.execute("UPDATE marks SET lat=?, lon=?, name=? WHERE race_id=? AND seq=?",
                (lat, lon, name, race_id, seq))
+    add_race_log(db, race_id,
+                 f"Course mark '{name}' moved "
+                 f"{m['lat']:.4f},{m['lon']:.4f} → {lat:.4f},{lon:.4f}.")
     db.commit()
     print(f"{name}: {m['lat']:.4f},{m['lon']:.4f} -> {lat:.4f},{lon:.4f}")
 

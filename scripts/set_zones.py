@@ -16,7 +16,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from vn import yb
-from vn.db import get_db
+from vn.db import add_race_log, get_db
 
 
 def main():
@@ -40,6 +40,10 @@ def main():
         sys.exit(1)
     db.execute("UPDATE races SET zones_json=? WHERE id=?",
                (json.dumps(zones), race_id))
+    add_race_log(db, race_id,
+                 f"{len(zones)} exclusion zone(s) imported from "
+                 f"yb.tl/{slug}: {', '.join(z['name'] for z in zones)}. "
+                 "Virtual boats inside sail at half speed.")
     db.commit()
     print(f"{r['name']}: {len(zones)} zone(s) stored")
     for z in zones:

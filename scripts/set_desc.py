@@ -11,7 +11,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from vn.db import get_db
+from vn.db import add_race_log, get_db
 
 
 def main():
@@ -29,6 +29,7 @@ def main():
         sys.exit(1)
     db.execute("UPDATE races SET description=replace(description,?,?) WHERE id=?",
                (old, new, race_id))
+    add_race_log(db, race_id, "Race description updated.")
     db.commit()
     d = db.execute("SELECT description FROM races WHERE id=?",
                    (race_id,)).fetchone()["description"]

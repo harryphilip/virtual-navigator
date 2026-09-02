@@ -134,6 +134,12 @@ CREATE TABLE IF NOT EXISTS forecast_snapshots (
   meta_json TEXT NOT NULL,
   grib BLOB NOT NULL
 );
+CREATE TABLE IF NOT EXISTS race_log (
+  id INTEGER PRIMARY KEY,
+  race_id INTEGER NOT NULL,
+  at INTEGER NOT NULL,                  -- unix seconds UTC
+  message TEXT NOT NULL                 -- committee action, plain language
+);
 """
 
 # additive migrations for databases created by earlier versions
@@ -175,3 +181,11 @@ def get_db():
         conn.commit()
         _local.conn = conn
     return conn
+
+
+def add_race_log(db, race_id, message, at=None):
+    """Append a committee-log entry — every course/zone/routing change goes
+    here so competitors can see what happened, when, and why. Caller commits."""
+    import time as _time
+    db.execute("INSERT INTO race_log(race_id, at, message) VALUES (?,?,?)",
+               (race_id, int(at or _time.time()), message))

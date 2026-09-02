@@ -1009,6 +1009,19 @@ def link_yb(race_id):
                     "positions": imported})
 
 
+@app.get("/api/races/<int:race_id>/log")
+def race_committee_log(race_id):
+    """The committee log: every course/zone/start/routing change, with when
+    and why — full transparency for competitors."""
+    db = get_db()
+    if not _race_or_404(db, race_id):
+        return _err("race not found", 404)
+    rows = db.execute(
+        "SELECT at, message FROM race_log WHERE race_id=? "
+        "ORDER BY at DESC, id DESC LIMIT 200", (race_id,)).fetchall()
+    return jsonify([{"at": r["at"], "message": r["message"]} for r in rows])
+
+
 # ---------- on-board forecast snapshots -------------------------------------
 
 @app.get("/api/races/<int:race_id>/forecasts")

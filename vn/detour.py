@@ -93,14 +93,35 @@ def _detour(entry, exit_, zone, all_zones, margin_nm):
     return best
 
 
-def route_around_zones(wps, zones, margin_nm=3.0, rounds=8, step_nm=0.25):
+def _densify(path, step_nm=12.0):
+    """Interpolate points along a path so no leg exceeds step_nm.
+
+    The engine steers best-VMC at the next waypoint, not along the leg
+    line — on a beat a boat aiming at a waypoint 200 nm off can wander
+    tens of miles from the rhumb, straight back into the zone the leg was
+    routed around. Close waypoints keep the wander to a couple of miles.
+    """
+    out = [path[0]]
+    for k in range(len(path) - 1):
+        a, b = path[k], path[k + 1]
+        n = max(1, int(haversine_nm(a[0], a[1], b[0], b[1]) / step_nm))
+        for i in range(1, n + 1):
+            f = i / n
+            out.append((a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f))
+    return out
+
+
+def route_around_zones(wps, zones, margin_nm=6.0, rounds=8, step_nm=0.25):
     """Rewrite waypoints [(lat, lon), ...] to clear every zone.
 
     Legs are sampled every step_nm — fine enough to catch a long leg
-    skimming a sliver zone at a shallow angle. Returns (waypoints, touched)
-    where touched lists (zone name, waypoints removed, boundary points
-    inserted). Converges or returns with a final entry ('!unresolved', 0, 0)
-    so callers can warn.
+    skimming a sliver zone at a shallow angle. Detour paths are offset
+    margin_nm outside the zone and densified, both for the same reason:
+    the simulator's VMC steering swings around the leg line when beating,
+    so thin margins and sparse waypoints get a boat penalised anyway.
+    Returns (waypoints, touched) where touched lists (zone name, waypoints
+    removed, boundary points inserted). Converges or returns with a final
+    entry ('!unresolved', 0, 0) so callers can warn.
     """
     wps = list(wps)
     touched = []
@@ -120,6 +141,7 @@ def route_around_zones(wps, zones, margin_nm=3.0, rounds=8, step_nm=0.25):
                     j += 1
                 end = min(j + 1, len(wps) - 1)   # never splice the endpoint away
                 path = _detour(wps[i], wps[end], z, zones, margin_nm)
+                path = _densify([wps[i]] + path + [wps[end]])[1:-1]
                 wps[i + 1:end] = path
                 touched.append((z["name"], j - i, len(path)))
                 dirty = True
@@ -130,7 +152,7 @@ def route_around_zones(wps, zones, margin_nm=3.0, rounds=8, step_nm=0.25):
     return wps, touched
 
 
-def smart_join(start, wps, zones, margin_nm=3.0, search_nm=900.0,
+def smart_join(start, wps, zones, margin_nm=6.0, search_nm=900.0,
                coarse=10, slack_nm=10.0):
     """Where should a boat at `start` pick up its routing?
 

@@ -16,7 +16,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from vn.db import get_db
+from vn.db import add_race_log, get_db
 
 
 def main():
@@ -64,6 +64,10 @@ def main():
     if repl:
         db.execute("UPDATE races SET description=replace(description,?,?) "
                    "WHERE id=?", (repl[0], repl[1], race_id))
+    add_race_log(db, race_id,
+                 f"Start rescheduled {old:%d %b %H:%M}Z → {when:%d %b %H:%M}Z; "
+                 f"{moored} waiting boat(s) re-anchored to the new gun."
+                 + (" Race description updated to match." if repl else ""))
     db.commit()
     print(f"{r['name']}: start {old:%Y-%m-%d %H:%M}Z -> {when:%Y-%m-%d %H:%M}Z"
           + f", {moored} boat(s) re-anchored to the new gun"

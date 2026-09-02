@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from vn import yb
-from vn.db import get_db
+from vn.db import add_race_log, get_db
 from vn.realfleet import ingest_points
 from vn.sim import get_marks
 
@@ -57,6 +57,9 @@ def main():
                 (race_id, name, t["model"][:60], t["yb_id"]))
             by_yb[t["yb_id"]] = cur.lastrowid
     db.execute("UPDATE races SET yb_slug=? WHERE id=?", (slug, race_id))
+    add_race_log(db, race_id,
+                 f"Live tracker linked: yb.tl/{slug}, {len(teams)} real "
+                 "boat(s) on the leaderboard, full track history imported.")
     db.commit()
 
     imported = 0

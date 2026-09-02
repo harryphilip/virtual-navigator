@@ -16,7 +16,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from vn.db import get_db
+from vn.db import add_race_log, get_db
 from vn.detour import route_around_zones, smart_join
 from vn.sim import enforce_course, get_marks, race_zones
 
@@ -63,6 +63,10 @@ def main():
         "UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=1, finished_at=NULL,"
         " wind_side=NULL, maneuvers=0, groundings=0, zone_steps=0 WHERE id=?",
         (race["start_time"], start[0], start[1], b["id"]))
+    add_race_log(db, race_id,
+                 f"{name} restarted from the line and replayed from the gun "
+                 "through recorded weather."
+                 + ("".join(" " + n for n in notes) if notes else ""))
     db.commit()
     print(f"{name}: restarted on the line at {start[0]:.4f},{start[1]:.4f}, "
           f"{len(wps)} waypoint(s) re-armed — replay begins next tick")

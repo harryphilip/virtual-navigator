@@ -42,6 +42,14 @@
       <div id="docs_list" class="small"></div>
     </div>
 
+    <div class="card" id="log_card" style="display:none">
+      <h2>Committee log</h2>
+      <p class="small muted" style="margin:2px 0 8px">
+        Every change to the course, exclusion zones, start time, or a boat's
+        routing is recorded here — what happened, when, and why.</p>
+      <div id="log_list" class="small"></div>
+    </div>
+
     <div class="card">
       <h2>On-board forecasts</h2>
       <p class="small muted" style="margin:2px 0 8px">
@@ -217,6 +225,7 @@ async function loadRace() {
   document.getElementById('dl_polar').href = `/api/races/${raceId}/polar`;
   loadForecasts();
   loadDocs();
+  loadLog();
   const pts = race.marks.map(m => [m.lat, m.lon]);
   courseBounds = L.latLngBounds(pts).pad(0.25);
   // ENC coverage is US waters — start foreign courses on the OSM base
@@ -315,6 +324,18 @@ async function loadDocs() {
       `<div>📄 <a href="/api/docs/${d.id}">${esc(d.filename)}</a>` +
       ` <span class="muted">· ${label[d.kind] || d.kind} · ${Math.round(d.size / 1024)} kB</span></div>`
     ).join('');
+  } catch (e) { /* card stays hidden */ }
+}
+
+async function loadLog() {
+  try {
+    const log = await api(`/api/races/${raceId}/log`);
+    if (!log.length) return;
+    document.getElementById('log_card').style.display = 'block';
+    document.getElementById('log_list').innerHTML = log.map(l => {
+      const d = new Date(l.at * 1000).toISOString().slice(5, 16).replace('T', ' ');
+      return `<div style="margin-bottom:6px"><span class="muted">${d}z</span> — ${esc(l.message)}</div>`;
+    }).join('');
   } catch (e) { /* card stays hidden */ }
 }
 

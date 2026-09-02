@@ -15,7 +15,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from vn.db import get_db
+from vn.db import add_race_log, get_db
 from vn.detour import route_around_zones
 from vn.geo import haversine_nm
 from vn.sim import race_zones
@@ -49,6 +49,12 @@ def main():
     db.execute("DELETE FROM route_wps WHERE boat_id=?", (b["id"],))
     db.executemany("INSERT INTO route_wps(boat_id,seq,lat,lon) VALUES (?,?,?,?)",
                    [(b["id"], s, la, lo) for s, (la, lo) in enumerate(wps)])
+    add_race_log(db, race_id,
+                 f"{name}'s routing detoured around exclusion zones "
+                 "(routing predated them): "
+                 + "; ".join(f"{z} ({cut} wp → {ins})"
+                             for z, cut, ins in touched if z != "!unresolved")
+                 + ".")
     db.commit()
     after = sum(haversine_nm(*wps[i], *wps[i + 1]) for i in range(len(wps) - 1))
     print(f"{name}: {len(wps)} waypoint(s), route {before:.0f} -> {after:.0f} nm "
