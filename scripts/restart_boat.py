@@ -17,7 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from vn.db import get_db
-from vn.detour import route_around_zones
+from vn.detour import route_around_zones, smart_join
 from vn.sim import enforce_course, get_marks, race_zones
 
 
@@ -42,7 +42,13 @@ def main():
     start = (marks[0]["lat"], marks[0]["lon"])
     wps, notes = enforce_course(wps, marks, 1, race["mark_radius_nm"], start)
     zones = race_zones(race)
-    if zones:
+    if zones and len(marks) == 2:
+        # no intermediate roundings: free to pick up the routing wherever
+        # a zone-clean sail from the line reaches it cheapest
+        wps, znotes = smart_join(start, wps, zones)
+        wps = wps[1:]                     # the line itself stays the anchor
+        notes += znotes
+    elif zones:
         wps, touched = route_around_zones([start] + wps, zones)
         wps = wps[1:]                     # the line itself stays the anchor
         for zname, cut, ins in touched:

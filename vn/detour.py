@@ -118,9 +118,9 @@ def route_around_zones(wps, zones, margin_nm=3.0, rounds=8, step_nm=0.25):
                         point_in_poly(wps[j][0], wps[j][1], z["pts"])
                         or leg_hits(wps[j], wps[j + 1], z["pts"], step_nm)):
                     j += 1
-                path = _detour(wps[i], wps[min(j + 1, len(wps) - 1)],
-                               z, zones, margin_nm)
-                wps[i + 1:j + 1] = path
+                end = min(j + 1, len(wps) - 1)   # never splice the endpoint away
+                path = _detour(wps[i], wps[end], z, zones, margin_nm)
+                wps[i + 1:end] = path
                 touched.append((z["name"], j - i, len(path)))
                 dirty = True
                 i += len(path) + 1
@@ -128,3 +128,46 @@ def route_around_zones(wps, zones, margin_nm=3.0, rounds=8, step_nm=0.25):
             return wps, touched
     touched.append(("!unresolved", 0, 0))
     return wps, touched
+
+
+def smart_join(start, wps, zones, margin_nm=3.0, search_nm=900.0,
+               coarse=10, slack_nm=10.0):
+    """Where should a boat at `start` pick up its routing?
+
+    Joining at the nearest waypoint can force an expensive walk around a
+    zone when a straight (or lightly detoured) sail to a later waypoint is
+    shorter — e.g. a start line moved south of a keep-out sliver that the
+    routing rounds to the north.  Scans candidate joins along the first
+    search_nm of the routing and keeps the earliest one within slack_nm of
+    the cheapest, so as much of the submitted routing as possible survives.
+    Only safe on courses without intermediate marks in the searched span —
+    a skipped stretch must not contain a rounding.  Returns (waypoints
+    with `start` as the first element, notes).
+    """
+    def plen(p):
+        return sum(haversine_nm(*p[i], *p[i + 1]) for i in range(len(p) - 1))
+    cum = [0.0]
+    for i in range(len(wps) - 1):
+        cum.append(cum[-1] + haversine_nm(*wps[i], *wps[i + 1]))
+    total = cum[-1]
+    cands = []
+    for k in range(0, len(wps), coarse):
+        if cum[k] > search_nm:
+            break
+        head, _ = route_around_zones([start, wps[k]], zones, margin_nm)
+        cands.append((plen(head) + (total - cum[k]), k, head))
+    best = min(c[0] for c in cands)
+    cost, k, head = next(c for c in cands if c[0] <= best + slack_nm)
+    out, touched = route_around_zones(head + wps[k + 1:], zones, margin_nm)
+    notes = []
+    if k:
+        notes.append(
+            f"joined the routing {cum[k]:.0f} nm along at "
+            f"{wps[k][0]:.2f},{wps[k][1]:.2f} — {cands[0][0] - cost:.0f} nm "
+            "shorter than picking it up at the head and detouring")
+    for zname, cut, ins in touched:
+        notes.append("⛔ routing still brushes a zone — check the map"
+                     if zname == "!unresolved" else
+                     f"⛔ {zname}: {cut} waypoint(s) detoured via "
+                     f"{ins} boundary point(s)")
+    return out, notes
