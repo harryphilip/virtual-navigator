@@ -224,6 +224,31 @@ button:disabled { opacity: .4; cursor: default; }
   padding: 4px 9px; font-family: var(--mono); font-size: 11px; white-space: nowrap;
 }
 
+/* ---- real vs virtual: diverging gap bars ------------------------------------------ */
+.cmp-head { margin: 0 0 10px; }
+.cmp-row {
+  display: grid; grid-template-columns: 84px 1fr 56px;
+  align-items: center; gap: 8px; margin: 3px 0;
+}
+.cmp-lab {
+  font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+  font-weight: 700; color: var(--muted);
+}
+.cmp-track { position: relative; height: 14px; background: #f4f4f2; border: 1px solid var(--line); }
+.cmp-track::before {
+  content: ''; position: absolute; left: 50%; top: -3px; bottom: -3px;
+  border-left: 1px solid var(--border);
+}
+.cmp-seg { position: absolute; top: 2px; bottom: 2px; background: var(--accent); }
+.cmp-seg.v { background: var(--steel); }
+.cmp-val { font-family: var(--mono); font-size: 12px; text-align: right; }
+.cmp-axis {
+  display: flex; justify-content: space-between;
+  font-size: 10.5px; color: var(--faint); margin: 2px 0 4px;
+}
+table.cmp-table td, table.cmp-table th { padding: 4px 8px; }
+table.cmp-table td:not(:first-child), table.cmp-table th:not(:first-child) { text-align: right; }
+
 /* ---- data text ------------------------------------------------------------------ */
 code, pre {
   font-family: var(--mono);

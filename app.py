@@ -16,6 +16,7 @@ from flask import Flask, jsonify, request, send_from_directory, Response
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from vn import yb
+from vn.compare import CompareError, compare
 from vn.db import add_race_log, get_db
 from vn.forecast import make_snapshot
 from vn.nor import extract_race, MAX_DOC_BYTES
@@ -1030,6 +1031,61 @@ def race_committee_log(race_id):
         "SELECT at, message FROM race_log WHERE race_id=? "
         "ORDER BY at DESC, id DESC LIMIT 200", (race_id,)).fetchall()
     return jsonify([{"at": r["at"], "message": r["message"]} for r in rows])
+
+
+# ---------- real vs virtual: why the gap? -----------------------------------
+
+_compare_memo = {}       # (rb_id, boat_id) -> (key, result)
+COMPARE_MEMO_MAX = 64
+
+
+@app.get("/api/races/<int:race_id>/compare")
+def race_compare(race_id):
+    """Split the gap between a tracked real boat and a virtual boat into
+    boat speed (the real boat against the race polar on its own track),
+    navigation (where each boat went) and start offset — see vn/compare.py.
+    Without ?virtual= only the real boat's polar report is returned.
+    Tracks are public, so the analysis is too."""
+    db = get_db()
+    r = _race_or_404(db, race_id)
+    if not r:
+        return _err("race not found", 404)
+    try:
+        rb_id = int(request.args.get("real", ""))
+    except ValueError:
+        return _err("real=<real boat id> is required")
+    rb = db.execute("SELECT * FROM real_boats WHERE id=? AND race_id=?",
+                    (rb_id, race_id)).fetchone()
+    if not rb:
+        return _err("real boat not found", 404)
+    boat = None
+    if request.args.get("virtual"):
+        try:
+            boat_id = int(request.args["virtual"])
+        except ValueError:
+            return _err("virtual=<boat id> must be a number")
+        catch_up_race(db, race_id)
+        boat = db.execute("SELECT * FROM boats WHERE id=? AND race_id=?",
+                          (boat_id, race_id)).fetchone()
+        if not boat:
+            return _err("virtual boat not found", 404)
+    # re-sailing a long track is real work; reuse the answer until either
+    # track has advanced
+    key = (rb["last_t"], boat["sim_time"] if boat else None,
+           boat["finished_at"] if boat else None)
+    memo_id = (rb_id, boat["id"] if boat else None)
+    hit = _compare_memo.get(memo_id)
+    if hit and hit[0] == key:
+        return jsonify(hit[1])
+    marks = get_marks(db, race_id)
+    try:
+        out = compare(db, r, marks, rb, boat)
+    except CompareError as e:
+        return _err(str(e), 409)
+    if len(_compare_memo) >= COMPARE_MEMO_MAX:
+        _compare_memo.pop(next(iter(_compare_memo)))
+    _compare_memo[memo_id] = (key, out)
+    return jsonify(out)
 
 
 # ---------- on-board forecast snapshots -------------------------------------

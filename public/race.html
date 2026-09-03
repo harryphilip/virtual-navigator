@@ -40,6 +40,23 @@
       </div>
     </div>
 
+    <div class="card" id="cmp_card" style="display:none">
+      <h2>Real vs virtual — why the gap?</h2>
+      <p class="small muted" style="margin:2px 0 8px">
+        A tracked boat ahead of you (or behind) is telling you two different
+        things. <b style="color:var(--text)">Boat speed</b>: its own track
+        re-sailed at race-polar speed through the same wind — how much faster
+        or slower than the polar it really goes.
+        <b style="color:var(--text)">Navigation</b>: what's left once boat
+        speed is taken out — where each boat went, and when. Click any
+        leaderboard row to pick it.</p>
+      <div class="row">
+        <div><label>Real boat</label><select id="cmp_real"></select></div>
+        <div><label>Virtual boat</label><select id="cmp_virtual"></select></div>
+      </div>
+      <div id="cmp_out" class="small" style="margin-top:12px"></div>
+    </div>
+
     <div class="card" id="docs_card" style="display:none">
       <h2>Race documents</h2>
       <div id="docs_list" class="small"></div>
@@ -347,6 +364,7 @@ async function refresh() {
   if (!hadFleet && fleetBounds && !userMoved) fitHome();
   drawFleet();
   drawLeaderboard();
+  fillCompare();
   if (my) refreshMine().catch(() => {});
 }
 
@@ -456,10 +474,141 @@ function drawLeaderboard() {
     tr.innerHTML = `<td>${e.rank}</td>
       <td ${mine ? 'style="color:var(--accent);font-weight:650"' : ''}>${nm}${mine ? ' ◂' : ''}</td>
       <td>${badge}</td><td>${e.finished_at ? '0' : Math.round(e.dtf)}</td><td>${fmt1(e.sog)}</td>`;
+    if (e.started) {
+      tr.style.cursor = 'pointer';
+      tr.title = 'compare this boat — real vs virtual';
+      tr.onclick = (ev) => {
+        if (ev.target.closest('a')) return;
+        if (e.type === 'real') cmpSel.real = e.id; else cmpSel.virtual = e.id;
+        fillCompare();
+        document.getElementById('cmp_card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      };
+    }
     tb.appendChild(tr);
   });
   document.getElementById('lb_meta').textContent =
     `${shown} boats · course ${Math.round(state.course_len_nm)} nm`;
+}
+
+/* ---------------- real vs virtual: why the gap? ---------------- */
+let cmpSel = { real: null, virtual: undefined };   // '' = race polar only
+function fillCompare() {
+  const card = document.getElementById('cmp_card');
+  const reals = state.entries.filter(e => e.type === 'real' && e.started);
+  const virts = state.entries.filter(e => e.type === 'virtual' && e.started);
+  if (!reals.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  if (!reals.some(e => e.id === cmpSel.real)) cmpSel.real = reals[0].id;
+  if (cmpSel.virtual === undefined ||
+      (cmpSel.virtual !== '' && !virts.some(e => e.id === cmpSel.virtual))) {
+    const mine = my && virts.find(e => e.id === my.boatId);
+    cmpSel.virtual = mine ? mine.id : (virts.length ? virts[0].id : '');
+  }
+  const opt = e => `<option value="${e.id}">${esc(e.name)}` +
+    `${e.type === 'real' && e.klass ? ' · ' + esc(e.klass) : ''}</option>`;
+  const rs = document.getElementById('cmp_real'), vs = document.getElementById('cmp_virtual');
+  rs.innerHTML = reals.map(opt).join('');
+  vs.innerHTML = '<option value="">race polar only</option>' + virts.map(opt).join('');
+  rs.value = String(cmpSel.real);
+  vs.value = String(cmpSel.virtual);
+  runCompare();
+}
+document.getElementById('cmp_real').onchange = ev => { cmpSel.real = +ev.target.value; runCompare(); };
+document.getElementById('cmp_virtual').onchange = ev => {
+  cmpSel.virtual = ev.target.value === '' ? '' : +ev.target.value; runCompare();
+};
+
+let cmpSeq = 0, cmpLastQ = '';
+async function runCompare() {
+  const out = document.getElementById('cmp_out');
+  const q = `real=${cmpSel.real}` + (cmpSel.virtual ? `&virtual=${cmpSel.virtual}` : '');
+  const seq = ++cmpSeq;
+  if (q !== cmpLastQ) out.innerHTML = '<span class="muted">re-sailing the tracks…</span>';
+  cmpLastQ = q;
+  try {
+    const c = await api(`/api/races/${raceId}/compare?${q}`);
+    if (seq !== cmpSeq) return;
+    out.innerHTML = renderCompare(c);
+  } catch (e) {
+    if (seq !== cmpSeq) return;
+    out.innerHTML = `<span class="muted">${esc(e.message)}</span>`;
+  }
+}
+
+function fmtDur(h) {
+  const m = Math.round(Math.abs(h) * 60);
+  return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+}
+function fmtSigned(h) {
+  const m = Math.round(Math.abs(h) * 60);
+  return (m === 0 ? '' : h < 0 ? '−' : '+') + `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+}
+function pct(x) { return x == null ? '—' : Math.round(x) + '%'; }
+
+function renderCompare(c) {
+  const r = c.real, v = c.virtual;
+  const perf = Math.round(c.perf_factor * 100);
+  let h = '';
+  if (v) {
+    const level = Math.abs(c.gap_h) < 1 / 120;
+    h += `<p class="cmp-head"><b>${esc(r.name)}</b> reached <b>${esc(c.reference)}</b> ` +
+      (level ? 'level with' : `${fmtDur(c.gap_h)} ${c.gap_h > 0 ? 'ahead of' : 'behind'}`) +
+      ` <b>${esc(v.name)}</b>.</p>`;
+    if (c.components) {
+      const k = c.components;
+      const rows = [
+        ['Boat speed', k.boat_speed_h,
+         `${r.name} sailed at ${pct(r.pct_polar)} of the race polar on its own track`],
+        ['Navigation', k.navigation_h,
+         'where each boat went and when — wind found, miles sailed, tacks paid'],
+        ['Start', k.start_h, 'clock offset at the gun'],
+      ];
+      const scale = Math.max(...rows.map(x => Math.abs(x[1])), 0.25);
+      h += '<div class="cmp-rows">' + rows.map(([lab, val, tip]) => {
+        const w = Math.abs(val) / scale * 50;
+        const seg = val >= 0 ? `left:50%;width:${w}%` : `right:50%;width:${w}%`;
+        return `<div class="cmp-row" title="${esc(tip)}"><span class="cmp-lab">${lab}</span>` +
+          `<div class="cmp-track"><i class="cmp-seg ${val >= 0 ? 'r' : 'v'}" style="${seg}"></i></div>` +
+          `<span class="cmp-val">${fmtSigned(val)}</span></div>`;
+      }).join('') + '</div>';
+      h += `<div class="cmp-axis"><span>◀ ${esc(v.name)} gains</span><span>${esc(r.name)} gains ▶</span></div>`;
+    }
+  } else {
+    h += `<p class="cmp-head"><b>${esc(r.name)}</b> ` +
+      (c.target_dtf_nm <= 0 ? `sailed ${Math.round(r.distance_nm)} nm to the finish`
+        : `has sailed ${Math.round(r.distance_nm)} nm so far (${esc(c.reference)})`) +
+      ` at <b>${pct(r.pct_polar)}</b> of the race polar.</p>`;
+  }
+
+  const band = b => `<tr><td>${esc(b.band)}</td><td>${pct(b.share == null ? null : b.share * 100)}</td>` +
+    `<td>${pct(b.pct_polar)}</td></tr>`;
+  h += `<h3>${esc(r.name)} vs the race polar</h3>` +
+    '<table class="list cmp-table"><thead><tr><th>Point of sail</th><th>time</th><th>% polar</th></tr></thead><tbody>' +
+    r.by_pos.map(band).join('') +
+    '<tr><th>Wind</th><th></th><th></th></tr>' + r.by_tws.map(band).join('') +
+    `<tr><td><b>overall</b></td><td>${Math.round(r.distance_nm)} nm</td><td><b>${pct(r.pct_polar)}</b></td></tr>` +
+    '</tbody></table>' +
+    `<div class="muted" style="margin-top:4px">The race polar is ${esc(c.polar_name)} scaled to ${perf}%` +
+    (r.pct_polar == null ? '' : `, so ${esc(r.name)} sails at ${pct(r.pct_polar * c.perf_factor)} of the raw polar`) +
+    '.</div>';
+
+  if (v) {
+    const row = (lab, a, b) => `<tr><td>${lab}</td><td>${a}</td><td>${b}</td></tr>`;
+    const up = s => { const u = s.by_pos.find(b => b.band === 'upwind'); return pct(u && u.share != null ? u.share * 100 : null); };
+    h += '<h3>Route</h3><table class="list cmp-table"><thead><tr><th></th>' +
+      `<th>${esc(r.name)}</th><th>${esc(v.name)}</th></tr></thead><tbody>` +
+      row('elapsed', fmtDur(r.elapsed_h), fmtDur(v.elapsed_h)) +
+      row('sailed', `${Math.round(r.distance_nm)} nm`, `${Math.round(v.distance_nm)} nm`) +
+      row('average speed', `${fmt1(r.avg_sog)} kn`, `${fmt1(v.avg_sog)} kn`) +
+      row('average wind', `${fmt1(r.avg_tws)} kn`, `${fmt1(v.avg_tws)} kn`) +
+      row('time upwind', up(r), up(v)) +
+      row('% of race polar', pct(r.pct_polar), pct(v.pct_polar)) +
+      row('tacks / gybes', '—', v.maneuvers) +
+      '</tbody></table>';
+  }
+  if (c.notes && c.notes.length)
+    h += '<div class="muted" style="margin-top:8px">' + c.notes.map(n => `· ${esc(n)}`).join('<br>') + '</div>';
+  return h;
 }
 
 /* ---------------- my boat ---------------- */

@@ -87,6 +87,19 @@ through real historical wind. Demo boats use PIN `0000`; the demo admin key is
   Real boats carry a class label, with one-click filters such as
   *Class: Same polar (40ft)* to compare yourself against the boats actually
   sailing your polar.
+- **Why the gap? Boat speed vs navigation.** Pick any tracked boat and any
+  virtual boat on the race page and the time gap at equal progress (the
+  leaderboard's distance-to-finish) is split three ways that sum exactly:
+  *boat speed* — the real boat's own track re-sailed at race-polar speed
+  through the same modelled wind, i.e. its "% of polar", also broken down
+  by point of sail and wind band so an admin can see whether the polar or
+  the performance factor is off; *navigation* — what is left once boat
+  speed is removed: two polar boats on two routes, so wind found, miles
+  sailed, tacks paid, and being there when the breeze was; and *start* for
+  late entries. Historical tracks use only wind already in the cache;
+  segments without data are assumed to sail at the boat's average % of
+  polar and the coverage is reported. Without a virtual boat the card is a
+  plain polar report for the real boat.
 - **Live YB Tracking link.** Give a race the slug of a yb.tl tracker
   (optionally filtered to one class, e.g. `model_filter: "IMOCA"`) and the
   server imports the fleet roster + full track history, then polls for new
@@ -168,6 +181,7 @@ POST /api/races/<id>/docs            attach more documents (admin)
 GET  /api/races/<id>/docs            list race documents
 GET  /api/docs/<id>                  download a document
 POST /api/races/<id>/yb              link a yb.tl race {admin_key, slug, model_filter?}
+GET  /api/races/<id>/compare?real=&virtual=  gap split: boat speed / navigation / start
 GET  /api/races/<id>/forecasts       list on-board forecast snapshots
 GET  /api/forecasts/<id>.grb         download one snapshot as GRIB-1
 ```
