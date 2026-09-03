@@ -212,6 +212,17 @@ button:disabled { opacity: .4; cursor: default; }
   font-family: var(--mono); white-space: nowrap; box-shadow: none;
 }
 .boat-label::before { display: none; }
+#minimap {
+  position: absolute; left: 10px; bottom: 10px; z-index: 900;
+  width: 190px; height: 130px; background: #eef1f3;
+  border: 2px solid var(--border); box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+  cursor: pointer;
+}
+@media (max-width: 900px) { #minimap { width: 140px; height: 95px; } }
+.map-legend {
+  background: #ffffffee; border: 1px solid var(--border); color: var(--text);
+  padding: 4px 9px; font-family: var(--mono); font-size: 11px; white-space: nowrap;
+}
 
 /* ---- data text ------------------------------------------------------------------ */
 code, pre {

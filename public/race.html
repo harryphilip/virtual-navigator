@@ -236,7 +236,8 @@ async function loadRace() {
   const ctr = courseBounds.getCenter();
   setBase(ctr.lng > -130 && ctr.lng < -60 && ctr.lat > 15 && ctr.lat < 50);
   drawCourse();
-  fitCourse();
+  fitHome();
+  initMini();
 }
 
 function drawCourse() {
@@ -262,27 +263,71 @@ function drawCourse() {
       { className: 'boat-label', sticky: true });
   });
 }
-let courseBounds = null;
-function fitCourse() {
+let courseBounds = null, fleetBounds = null;
+function fitHome() {
   // the map div can measure 0x0 if Leaflet initialised before layout settled
   map.invalidateSize();
-  if (courseBounds) map.fitBounds(courseBounds);
+  // default framing is the fleet, not the whole course — the overview inset
+  // carries the course context. Cap the zoom so a tight pre-start cluster
+  // doesn't dive to harbor scale.
+  if (fleetBounds) map.fitBounds(fleetBounds, { maxZoom: 10 });
+  else if (courseBounds) map.fitBounds(courseBounds);
 }
-// the pane can lay out (and resize) well after load; keep the course framed
+// the pane can lay out (and resize) well after load; keep the fleet framed
 // until the user takes over the chart themselves
 let userMoved = false;
 ['mousedown', 'wheel', 'touchstart'].forEach(ev =>
   document.getElementById('map').addEventListener(ev, () => { userMoved = true; }, { passive: true }));
 new ResizeObserver(() => {
   map.invalidateSize();
-  if (!userMoved) fitCourse();
+  if (!userMoved) fitHome();
 }).observe(document.getElementById('map'));
 
-const palette = ['#1864ab', '#2b8a3e', '#9c36b5', '#0b7285', '#d9480f', '#5f3dc4', '#c2255c', '#087f5b'];
+/* overview inset — the full course for context while the main chart stays on the fleet */
+const mini = { map: null, rect: null };
+function initMini() {
+  if (mini.map || !courseBounds) return;
+  const div = document.createElement('div');
+  div.id = 'minimap';
+  document.getElementById('map').appendChild(div);
+  L.DomEvent.disableClickPropagation(div);
+  L.DomEvent.disableScrollPropagation(div);
+  mini.map = L.map(div, { attributionControl: false, zoomControl: false,
+    dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
+    boxZoom: false, keyboard: false, touchZoom: false, zoomSnap: 0.25 });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 12 }).addTo(mini.map);
+  const pts = race.marks.map(m => [m.lat, m.lon]);
+  L.polyline(pts, { color: COLORS.course, weight: 1.5, dashArray: '4 4', opacity: .9 }).addTo(mini.map);
+  [pts[0], pts[pts.length - 1]].forEach(p =>
+    L.circleMarker(p, { radius: 3, color: COLORS.mark, fillColor: COLORS.mark, fillOpacity: .8, weight: 1 }).addTo(mini.map));
+  mini.rect = L.rectangle(map.getBounds(),
+    { color: '#c8102e', weight: 1.5, fillOpacity: .08, interactive: false }).addTo(mini.map);
+  mini.map.fitBounds(courseBounds);
+  mini.map.on('click', ev => { userMoved = true; map.panTo(ev.latlng); });
+  div.title = 'full course — click to pan the chart';
+}
+map.on('move zoom', () => { if (mini.rect) mini.rect.setBounds(map.getBounds()); });
+
+/* orange is reserved for the real (tracker) fleet — virtual boats draw from
+   cool inks only, so color alone separates the two fleets */
+const palette = ['#1864ab', '#2b8a3e', '#9c36b5', '#0b7285', '#66a80f', '#5f3dc4', '#c2255c', '#087f5b'];
 function colorFor(e, i) {
   if (e.type === 'real') return '#e8590c';
   return palette[i % palette.length];
 }
+
+const legend = L.control({ position: 'bottomright' });
+legend.onAdd = () => {
+  const d = L.DomUtil.create('div', 'map-legend');
+  d.innerHTML =
+    '<span style="display:inline-block;width:9px;height:9px;background:#e8590c;' +
+      'transform:rotate(45deg);border:1.5px solid #fff;box-shadow:0 0 0 1px #101418"></span>' +
+    ' actual (tracker) &nbsp; ' +
+    '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;' +
+      'background:#1864ab;border:1.5px solid #101418"></span> virtual';
+  return d;
+};
+legend.addTo(map);
 
 async function refresh() {
   state = await api(`/api/races/${raceId}/state`);
@@ -296,6 +341,10 @@ async function refresh() {
   } else {
     warn.style.display = 'none';
   }
+  const fleetPts = state.entries.filter(e => e.lat != null).map(e => [e.lat, e.lon]);
+  const hadFleet = !!fleetBounds;
+  fleetBounds = fleetPts.length ? L.latLngBounds(fleetPts).pad(0.2) : null;
+  if (!hadFleet && fleetBounds && !userMoved) fitHome();
   drawFleet();
   drawLeaderboard();
   if (my) refreshMine().catch(() => {});
@@ -306,16 +355,19 @@ function drawFleet() {
   state.entries.forEach((e, i) => {
     if (!visible(e)) return;
     const c = colorFor(e, i);
+    // real boats: dotted track + white-ringed diamond; virtual: solid track + dark-ringed disc
     if (e.track && e.track.length > 1)
-      L.polyline(e.track, { color: c, weight: 1.4, opacity: .7 }).addTo(fleetLayer);
+      L.polyline(e.track, e.type === 'real'
+        ? { color: c, weight: 1.6, opacity: .8, dashArray: '2 5' }
+        : { color: c, weight: 1.4, opacity: .65 }).addTo(fleetLayer);
     if (e.lat != null) {
       const mk = e.type === 'real'
         ? L.marker([e.lat, e.lon], { icon: L.divIcon({ className: '', html:
-            `<div style="width:11px;height:11px;background:${c};transform:rotate(45deg);border:1.5px solid #101418"></div>`,
-            iconSize: [11, 11], iconAnchor: [5, 5] }) })
+            `<div style="width:12px;height:12px;background:${c};transform:rotate(45deg);border:2px solid #fff;box-shadow:0 0 0 1.5px #101418"></div>`,
+            iconSize: [12, 12], iconAnchor: [6, 6] }) })
         : L.circleMarker([e.lat, e.lon], { radius: 5.5, color: '#101418', weight: 1.5, fillColor: c, fillOpacity: 1 });
       mk.addTo(fleetLayer).bindTooltip(
-        `${esc(e.name)} · ${fmt1(e.sog)} kn · ${Math.round(e.dtf)} nm to go`,
+        `${esc(e.name)} · ${e.type === 'real' ? 'actual' : 'virtual'} · ${fmt1(e.sog)} kn · ${Math.round(e.dtf)} nm to go`,
         { className: 'boat-label', direction: 'top', offset: [0, -8] });
     }
   });
