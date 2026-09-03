@@ -186,6 +186,41 @@ GET  /api/races/<id>/forecasts       list on-board forecast snapshots
 GET  /api/forecasts/<id>.grb         download one snapshot as GRIB-1
 ```
 
+## Working on the code
+
+**Build features on a branch. Merge to `main` only when the feature is
+finished, tested, and going out in the next deploy.**
+
+This is not ceremony — `fly deploy` builds from the working directory, not
+from `main`. Anything sitting unfinished in the tree ships the moment
+someone deploys something else, and two half-done features editing the
+same file turn every commit into a hand-separated diff.
+
+```bash
+git switch -c real-vs-virtual     # start the work
+# … build and test it …
+git switch main && git merge real-vs-virtual
+fly deploy                        # main == what's live
+```
+
+Rules that follow from that:
+
+- **One feature per branch**, so an unfinished feature can never be
+  deployed by a change that has nothing to do with it.
+- **Keep `main` deployable at all times.** `main` should always be safe to
+  ship; if it isn't, the next person to deploy anything ships your bug.
+- **Deploy from a clean tree.** Run `git status` before `fly deploy`. If it
+  isn't clean, you don't know what you're about to put in front of the
+  fleet — commit it, stash it, or switch branches first.
+- **Verify against the live site, not the local file.** An edit that only
+  exists on disk is not live. `curl` the deployed page (or open it) and
+  confirm the change is actually there before calling it done.
+- **Check `fly releases`** if prod doesn't match what you expect — someone
+  else may have deployed since you last looked.
+
+Races run continuously and the sim advances every minute, so a bad deploy
+is sailed through and cannot be rewound. That is the reason for the care.
+
 ## Design notes & simplifications
 
 - A background ticker advances every race in its active window (start − 72 h
