@@ -94,9 +94,10 @@
         <div id="mb_fix" style="display:none;margin-top:6px" class="small">
           <code id="mb_pos"></code>
           <span class="muted" id="mb_fix_meta"></span>
-          <div class="row" style="margin-top:6px">
+          <div class="row fix-actions" style="margin-top:6px">
             <button class="ghost" id="mb_center">📍 Center chart</button>
-            <button class="ghost" id="mb_copy">Copy position</button>
+            <button class="ghost" id="mb_copy_lat">Copy lat</button>
+            <button class="ghost" id="mb_copy_lon">Copy lon</button>
           </div>
         </div>
         <div class="msg" id="mb_msg2"></div>
@@ -441,14 +442,18 @@ async function refreshFix() {
 document.getElementById('mb_center').onclick = () => {
   if (myFix) { userMoved = true; map.setView([myFix.lat, myFix.lon], Math.max(map.getZoom(), 9)); }
 };
-document.getElementById('mb_copy').onclick = async () => {
-  if (!myFix) return;
-  const txt = `${myFix.lat.toFixed(5)}, ${myFix.lon.toFixed(5)}`;
-  try { await navigator.clipboard.writeText(txt); } catch {}
-  const btn = document.getElementById('mb_copy');
-  btn.textContent = `Copied ${txt}`;
-  setTimeout(() => { btn.textContent = 'Copy position'; }, 2500);
-};
+function wireCopy(btnId, label, value) {
+  document.getElementById(btnId).onclick = async () => {
+    if (!myFix) return;
+    const txt = value().toFixed(5);
+    try { await navigator.clipboard.writeText(txt); } catch {}
+    const btn = document.getElementById(btnId);
+    btn.textContent = `Copied ${txt}`;
+    setTimeout(() => { btn.textContent = label; }, 2500);
+  };
+}
+wireCopy('mb_copy_lat', 'Copy lat', () => myFix.lat);
+wireCopy('mb_copy_lon', 'Copy lon', () => myFix.lon);
 
 async function refreshMine() {
   if (!my) return;

@@ -156,6 +156,10 @@ button.warn { background: var(--bad); border-color: var(--bad); }
 button:disabled { opacity: .4; cursor: default; }
 .row { display: flex; gap: 10px; }
 .row > * { flex: 1; }
+/* the fix row carries three buttons in a narrow column — let them size to their
+   own label and wrap, so "Copy lon" never breaks across two lines */
+.row.fix-actions { flex-wrap: wrap; }
+.row.fix-actions > button { flex: 0 1 auto; padding: 8px 12px; white-space: nowrap; }
 .msg { margin-top: 8px; font-size: 13px; min-height: 18px; }
 .msg.ok { color: var(--good); }
 .msg.err { color: var(--bad); }
