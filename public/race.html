@@ -17,6 +17,9 @@
   <div class="right"><span id="r_clock" class="clock"></span></div>
 </header>
 
+<div id="wx_warn" style="display:none;background:#c8102e;color:#fff;padding:8px 16px;
+     font-size:13px;font-weight:600" role="alert"></div>
+
 <div class="race-grid">
   <div id="map"></div>
   <div class="side">
@@ -282,6 +285,16 @@ function colorFor(e, i) {
 
 async function refresh() {
   state = await api(`/api/races/${raceId}/state`);
+  const warn = document.getElementById('wx_warn');
+  if (state.weather && state.weather.degraded) {
+    warn.textContent = `⚠ Weather source degraded — ${state.weather.synthetic_cells} ` +
+      'wind cell(s) are placeholder data while the forecast API is unreachable. ' +
+      'Routing uploads are paused until real wind returns (retried every 15 min); ' +
+      'see the committee log.';
+    warn.style.display = 'block';
+  } else {
+    warn.style.display = 'none';
+  }
   drawFleet();
   drawLeaderboard();
   if (my) refreshMine().catch(() => {});

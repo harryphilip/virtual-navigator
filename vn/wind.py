@@ -72,12 +72,22 @@ def get_wind(db, lat, lon, t_unix):
     return _synthetic(lat, lon, t_unix) + ("synthetic",)
 
 
+def _http_json(url, attempts=3, timeout=15):
+    """GET with a few short-backoff retries — one blip must not poison a cell."""
+    for i in range(attempts):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as resp:
+                return json.loads(resp.read().decode())
+        except Exception:
+            if i == attempts - 1:
+                raise
+            time.sleep(1 + 2 * i)
+
+
 def _fetch_cell(db, clat, clon):
     """Fetch the full hourly series for one grid cell; fall back to synthetic."""
     try:
-        url = API.format(lat=clat, lon=clon)
-        with urllib.request.urlopen(url, timeout=15) as resp:
-            data = json.loads(resp.read().decode())
+        data = _http_json(API.format(lat=clat, lon=clon))
         hh = data["hourly"]
         rows = []
         for t, spd, deg in zip(hh["time"], hh["wind_speed_10m"], hh["wind_direction_10m"]):
@@ -145,9 +155,7 @@ def _fetch_current_cell(db, clat, clon):
     rows = []
     ok = True
     try:
-        url = MARINE_API.format(lat=clat, lon=clon)
-        with urllib.request.urlopen(url, timeout=15) as resp:
-            data = json.loads(resp.read().decode())
+        data = _http_json(MARINE_API.format(lat=clat, lon=clon))
         hh = data["hourly"]
         for t, spd, deg in zip(hh["time"], hh["ocean_current_velocity"],
                                hh["ocean_current_direction"]):
@@ -183,3 +191,20 @@ def _synthetic(lat, lon, t_unix):
 def _lerp_angle(a, b, f):
     d = ((b - a + 540.0) % 360.0) - 180.0
     return (a + f * d) % 360.0
+
+
+def wind_health(db, now=None):
+    """Is the fleet sailing real weather right now?
+
+    Degraded means synthetic wind sits in the cache anywhere in the window a
+    routing would be evaluated against (recent past through the next day) —
+    the retry cooldown usually heals it within minutes, but while it lasts
+    the site shows a warning and routing uploads are paused.
+    """
+    now = int(now or time.time())
+    r = db.execute(
+        "SELECT COUNT(*) c, COUNT(DISTINCT lat || ',' || lon) cells, "
+        "MIN(t) t0 FROM wind_cache WHERE source='synthetic' AND t BETWEEN ? AND ?",
+        (now - 6 * 3600, now + 24 * 3600)).fetchone()
+    return {"degraded": r["c"] > 0, "synthetic_cells": r["cells"],
+            "since": r["t0"] if r["c"] else None}

@@ -16,7 +16,7 @@ from flask import Flask, jsonify, request, send_from_directory, Response
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from vn import yb
-from vn.db import get_db
+from vn.db import add_race_log, get_db
 from vn.forecast import make_snapshot
 from vn.nor import extract_race, MAX_DOC_BYTES
 from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to_gpx
@@ -24,6 +24,7 @@ from vn.polar import Polar
 from vn.realfleet import ingest_points, recompute
 from vn.sim import (catch_up_race, dtf_nm, enforce_course, get_marks,
                     race_polar, race_zones)
+from vn.wind import wind_health
 
 app = Flask(__name__, static_folder="public", static_url_path="")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)   # Fly's TLS proxy
@@ -464,6 +465,7 @@ def race_state(race_id):
                     "course_len_nm": course_len,
                     "marks": [{"name": m["name"], "lat": m["lat"], "lon": m["lon"]}
                               for m in marks],
+                    "weather": wind_health(db, now),
                     "entries": entries})
 
 
@@ -713,6 +715,14 @@ def submit_route(boat_id):
         return err
     race = _race_or_404(db, b["race_id"])
     now = int(time.time())
+
+    wx = wind_health(db, now)
+    if wx["degraded"]:
+        return _err(
+            "routing uploads are paused: the weather source is unreachable and "
+            f"{wx['synthetic_cells']} wind cell(s) hold placeholder data — "
+            "submitting against fake weather wouldn't be fair. The server "
+            "retries every 15 minutes; see the committee log for recovery.", 503)
 
     if "gpx" in d or "csv" in d:
         try:
@@ -1062,14 +1072,36 @@ SNAPSHOT_SECONDS = 6 * 3600
 _yb_last = {}
 
 
+_wx_degraded = None      # last observed weather health (None until first tick)
+
+
 def _tick():
+    global _wx_degraded
     db = get_db()
     now = int(time.time())
+    live = []
     for r in db.execute("SELECT * FROM races").fetchall():
         if now < r["start_time"] - 72 * 3600 or now > r["start_time"] + 60 * 86400:
             continue                                   # far from race window
+        live.append(r)
         catch_up_race(db, r["id"], now)
 
+    # weather health transitions go on every live race's committee log
+    wx = wind_health(db, now)
+    if _wx_degraded is not None and wx["degraded"] != _wx_degraded:
+        msg = (f"⚠ Weather source degraded: {wx['synthetic_cells']} wind "
+               "cell(s) fell back to placeholder data (API unreachable). "
+               "Routing uploads are paused; the server retries every 15 min."
+               if wx["degraded"] else
+               "Weather source restored — all wind cells carry real data "
+               "again; routing uploads reopened.")
+        for r in live:
+            add_race_log(db, r["id"], msg)
+        db.commit()
+        print(f"[ticker] {msg}")
+    _wx_degraded = wx["degraded"]
+
+    for r in live:
         if r["yb_slug"] and now - _yb_last.get(r["id"], 0) >= YB_POLL_SECONDS:
             _yb_last[r["id"]] = now
             try:
