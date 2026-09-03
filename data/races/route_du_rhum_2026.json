@@ -2,7 +2,7 @@
   "name": "Route du Rhum 2026 — Virtual",
   "description": "Virtual edition of the 13th Route du Rhum — Destination Guadeloupe: solo transat, Saint-Malo to Pointe-à-Pitre, ~3,542 nm. Start 12:02 UTC (13:02 local) Sun 1 Nov 2026 with the real gun. Course: past Cap Fréhel, clear Ushant, then across the Atlantic to round Guadeloupe the classic way — leave the Tête à l'Anglais at the north of Basse-Terre to port, run the leeward west coast, round Vieux-Fort at the south and beat back up to the finish off Pointe-à-Pitre. Trade-wind route vs. great circle is the whole game. Polar: legacy (non-foiling) IMOCA 60 at 95%; everyone sails the same numbers.",
   "start_time": "2026-11-01T12:02:00Z",
-  "polar_name": "IMOCA 60 (meltemus, non-foiling)",
+  "polar_name": "IMOCA Open 60 (non-foiling)",
   "polar_file": "../polar_imoca60.pol",
   "perf_factor": 0.95,
   "step_minutes": 10,
