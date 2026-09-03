@@ -12,10 +12,26 @@ import datetime as dt
 import json
 import math
 import threading
+import time
 import urllib.request
 
 GRID = 0.25          # degrees
 _lock = threading.Lock()
+_retry = {}          # (kind, cell) -> last fallback-refetch attempt, unix
+RETRY_SECONDS = 900
+
+
+def _retry_due(kind, clat, clon):
+    """Fallback data (synthetic wind, zero current) is cached so races keep
+    running offline, but it must heal: a cell serving fallback values gets
+    the real API retried at most once per RETRY_SECONDS — one rate-limited
+    fetch must not becalm a boat in fake weather for a week."""
+    key = (kind, clat, clon)
+    now = time.time()
+    if now - _retry.get(key, 0) < RETRY_SECONDS:
+        return False
+    _retry[key] = now
+    return True
 
 API = ("https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
        "&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn"
@@ -35,7 +51,9 @@ def get_wind(db, lat, lon, t_unix):
             "SELECT t, twd, tws, source FROM wind_cache WHERE lat=? AND lon=? "
             "AND t IN (?, ?)", (clat, clon, hour, hour + 3600)).fetchall()
         have = {r["t"]: r for r in rows}
-        if hour not in have or (hour + 3600) not in have:
+        stale = any(r["source"] == "synthetic" for r in have.values())
+        if (hour not in have or (hour + 3600) not in have
+                or (stale and _retry_due("wind", clat, clon))):
             _fetch_cell(db, clat, clon)
             rows = db.execute(
                 "SELECT t, twd, tws, source FROM wind_cache WHERE lat=? AND lon=? "
@@ -103,7 +121,9 @@ def get_current(db, lat, lon, t_unix):
             "SELECT t, cdir, cspd, source FROM current_cache WHERE lat=? AND lon=? "
             "AND t IN (?, ?)", (clat, clon, hour, hour + 3600)).fetchall()
         have = {r["t"]: r for r in rows}
-        if hour not in have or (hour + 3600) not in have:
+        stale = any(r["source"] == "none" for r in have.values())
+        if (hour not in have or (hour + 3600) not in have
+                or (stale and _retry_due("current", clat, clon))):
             _fetch_current_cell(db, clat, clon)
             rows = db.execute(
                 "SELECT t, cdir, cspd, source FROM current_cache WHERE lat=? AND lon=? "
@@ -123,6 +143,7 @@ def get_current(db, lat, lon, t_unix):
 def _fetch_current_cell(db, clat, clon):
     now = int(dt.datetime.now(dt.timezone.utc).timestamp())
     rows = []
+    ok = True
     try:
         url = MARINE_API.format(lat=clat, lon=clon)
         with urllib.request.urlopen(url, timeout=15) as resp:
@@ -135,13 +156,15 @@ def _fetch_current_cell(db, clat, clon):
                          "open-meteo"))
     except Exception:
         # no marine data here (land cell / offline): zero current, cached so
-        # we don't retry every step
+        # we don't retry every step (get_current retries on a cooldown)
+        ok = False
         for h in range(-7 * 24, 5 * 24):
             t = (now // 3600 + h) * 3600
             rows.append((clat, clon, t, 0.0, 0.0, "none"))
+    # real data may replace cached fallback zeros; fallback never clobbers real
     db.executemany(
-        "INSERT OR IGNORE INTO current_cache(lat,lon,t,cdir,cspd,source) "
-        "VALUES (?,?,?,?,?,?)", rows)
+        f"INSERT OR {'REPLACE' if ok else 'IGNORE'} INTO "
+        "current_cache(lat,lon,t,cdir,cspd,source) VALUES (?,?,?,?,?,?)", rows)
     db.commit()
 
 
