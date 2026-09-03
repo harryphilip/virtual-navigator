@@ -1,0 +1,23 @@
+{
+  "name": "Route du Rhum 2026 — Virtual",
+  "description": "Virtual edition of the 13th Route du Rhum — Destination Guadeloupe: solo transat, Saint-Malo to Pointe-à-Pitre, ~3,542 nm. Start 12:02 UTC (13:02 local) Sun 1 Nov 2026 with the real gun. Course: past Cap Fréhel, clear Ushant, then across the Atlantic to round Guadeloupe the classic way — leave the Tête à l'Anglais at the north of Basse-Terre to port, run the leeward west coast, round Vieux-Fort at the south and beat back up to the finish off Pointe-à-Pitre. Trade-wind route vs. great circle is the whole game. Polar: legacy (non-foiling) IMOCA 60 at 95%; everyone sails the same numbers.",
+  "start_time": "2026-11-01T12:02:00Z",
+  "polar_name": "IMOCA 60 (meltemus, non-foiling)",
+  "polar_file": "../polar_imoca60.pol",
+  "perf_factor": 0.95,
+  "step_minutes": 10,
+  "mark_radius_nm": 2.0,
+  "maneuver_penalty_s": 90,
+  "currents_enabled": true,
+  "grounding_depth_ft": 15,
+  "marks": [
+    {"name": "Start — Saint-Malo", "lat": 48.71, "lon": -1.97},
+    {"name": "Cap Fréhel", "lat": 48.72, "lon": -2.32},
+    {"name": "Ushant clearance", "lat": 48.52, "lon": -5.35},
+    {"name": "Tête à l'Anglais — N Basse-Terre", "lat": 16.56, "lon": -61.76},
+    {"name": "Leeward coast — W Basse-Terre", "lat": 16.20, "lon": -61.87},
+    {"name": "Vieux-Fort — S Basse-Terre", "lat": 15.90, "lon": -61.72},
+    {"name": "Capesterre clearance", "lat": 16.00, "lon": -61.49},
+    {"name": "Finish — Pointe-à-Pitre", "lat": 16.20, "lon": -61.52}
+  ]
+}
