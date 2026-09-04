@@ -6,7 +6,8 @@ On Fly:  fly ssh console -C "python /app/scripts/create_race.py /app/data/races/
 
 The JSON holds the race settings and marks; the polar comes from an inline
 "polar_text" or a "polar_file" path relative to the JSON file.  Prints the
-race id and admin key.  Refuses to create a second race with the same name.
+race id.  Refuses to create a second race with the same name.  Race
+management goes through admin accounts (make_admin.py).
 """
 import datetime as dt
 import json
@@ -61,7 +62,6 @@ def main():
     db.commit()
     print(f"race {race_id}: {d['name']}")
     print(f"start: {d['start_time']}  marks: {len(marks)}")
-    print(f"admin key: {admin_key}")
 
 
 if __name__ == "__main__":

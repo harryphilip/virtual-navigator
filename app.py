@@ -295,7 +295,7 @@ def create_race():
         db.execute("INSERT INTO marks(race_id,seq,name,lat,lon) VALUES (?,?,?,?,?)",
                    (race_id, i, m["name"], m["lat"], m["lon"]))
     db.commit()
-    return jsonify({"id": race_id, "admin_key": admin_key,
+    return jsonify({"id": race_id,
                     "polar_tws": polar.tws, "polar_twa": polar.twa})
 
 
@@ -580,7 +580,7 @@ def race_from_docs():
                    "uploaded_at) VALUES (?,?,?,?,?,?)",
                    (race_id, _doc_kind(fname), fname, mime, data, now))
     db.commit()
-    return jsonify({"id": race_id, "admin_key": admin_key,
+    return jsonify({"id": race_id,
                     "name": ex["name"], "start_time": start,
                     "marks": len(ex["marks"]), "extractor": ex["extractor"],
                     "warnings": warnings})
@@ -590,7 +590,7 @@ def race_from_docs():
 def add_race_doc(race_id):
     """Attach further documents (SIs, amendments) to an existing race."""
     db = get_db()
-    _, err = _auth_admin(db, race_id, request.form.get("admin_key"))
+    _, err = _auth_admin(db, race_id)
     if err:
         return err
     try:
@@ -900,24 +900,22 @@ def boat_track_gpx(boat_id):
 
 # ---------- real (tracked) boats -------------------------------------------
 
-def _auth_admin(db, race_id, key):
-    """Race management: any signed-in admin, or the legacy per-race key."""
+def _auth_admin(db, race_id):
+    """Race management: signed-in admin accounts only."""
     r = _race_or_404(db, race_id)
     if not r:
         return None, _err("race not found", 404)
     u = current_user(db)
     if u and u["is_admin"]:
         return r, None
-    if key and key == r["admin_key"]:
-        return r, None
-    return None, _err("admin access required", 403)
+    return None, _err("admin access required — sign in as an admin", 403)
 
 
 @app.post("/api/races/<int:race_id>/real_boats")
 def add_real_boat(race_id):
     db = get_db()
     d = request.get_json(force=True)
-    r, err = _auth_admin(db, race_id, d.get("admin_key"))
+    r, err = _auth_admin(db, race_id)
     if err:
         return err
     name = (d.get("name") or "").strip()
@@ -940,7 +938,7 @@ def import_real_track(rb_id):
     rb = db.execute("SELECT * FROM real_boats WHERE id=?", (rb_id,)).fetchone()
     if not rb:
         return _err("real boat not found", 404)
-    race, err = _auth_admin(db, rb["race_id"], d.get("admin_key"))
+    race, err = _auth_admin(db, rb["race_id"])
     if err:
         return err
     try:
@@ -961,7 +959,7 @@ def link_yb(race_id):
     """Link a YB Tracking race: import the fleet roster and full track history,
     then let the background poller keep positions fresh.
 
-    Body: {admin_key, slug, model_filter?, exclude?} — model_filter keeps only
+    Body: {slug, model_filter?, exclude?} — model_filter keeps only
     boats whose model string contains the given text (case-insensitive), e.g.
     to import just the class that sails your polar; exclude drops boats whose
     name contains any of the given comma-separated substrings (backup trackers,
@@ -969,7 +967,7 @@ def link_yb(race_id):
     """
     db = get_db()
     d = request.get_json(force=True)
-    race, err = _auth_admin(db, race_id, d.get("admin_key"))
+    race, err = _auth_admin(db, race_id)
     if err:
         return err
     slug = (d.get("slug") or "").strip().strip("/")

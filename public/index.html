@@ -139,7 +139,6 @@
     <div class="msg" id="d_msg"></div>
     <div id="d_result" style="display:none" class="small">
       <div id="d_summary"></div>
-      <b>Admin key</b> (save it): <pre id="d_key"></pre>
       <ul id="d_warn" class="steplist" style="color:var(--accent)"></ul>
     </div>
   </div>
@@ -199,9 +198,7 @@
     </div>
     <div style="margin-top:14px"><button id="c_go">Create race</button></div>
     <div class="msg" id="c_msg"></div>
-    <div id="c_key" style="display:none" class="small">
-      Race created. <b>Save the admin key</b> (needed to add tracked real boats):
-      <pre id="c_key_val"></pre>
+    <div id="c_next" style="display:none" class="small">
       <h3>Link the real fleet (YB Tracking)</h3>
       <p class="muted">If the real race is on yb.tl, enter its slug (the bit after
       <code>yb.tl/</code>) to import the fleet and let the server poll positions
@@ -391,9 +388,8 @@ document.getElementById('c_go').onclick = async () => {
     if (!res.ok) throw new Error(j.error || res.statusText);
     msg.className = 'msg ok';
     msg.textContent = 'Race created.';
-    document.getElementById('c_key').style.display = 'block';
-    document.getElementById('c_key_val').textContent = j.admin_key;
-    lastRace = { id: j.id, admin_key: j.admin_key };
+    document.getElementById('c_next').style.display = 'block';
+    lastRace = { id: j.id };
     loadRaces();
   } catch (e) {
     msg.className = 'msg err';
@@ -430,13 +426,12 @@ document.getElementById('d_go').onclick = async () => {
     }
     if (!res.ok) throw new Error(j.error || res.statusText);
     msg.className = 'msg ok'; msg.textContent = '';
-    lastRace = { id: j.id, admin_key: j.admin_key };
+    lastRace = { id: j.id };
     document.getElementById('d_result').style.display = 'block';
     document.getElementById('d_summary').innerHTML =
       `Created <a href="/race?id=${j.id}"><b>${esc(j.name || 'race')}</b></a> — ` +
       `${j.marks} marks, start ${new Date(j.start_time * 1000).toISOString().slice(0, 16).replace('T', ' ')}Z ` +
       `<span class="muted">(extractor: ${j.extractor})</span>`;
-    document.getElementById('d_key').textContent = j.admin_key;
     const ul = document.getElementById('d_warn');
     ul.innerHTML = (j.warnings || []).map(w => `<li>${esc(w)}</li>`).join('');
     loadRaces();
@@ -452,7 +447,7 @@ document.getElementById('yb_go').onclick = async () => {
   try {
     const res = await fetch(`/api/races/${lastRace.id}/yb`, { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ admin_key: lastRace.admin_key,
+      body: JSON.stringify({
         slug: document.getElementById('yb_slug').value,
         model_filter: document.getElementById('yb_filter').value }) });
     const j = await res.json();

@@ -16,8 +16,7 @@ python3 -m venv .venv
 ```
 
 The demo seeds a Newport→Bermuda challenge that started 36 h ago, simulated
-through real historical wind. Demo boats use PIN `0000`; the demo admin key is
-`demo-admin`.
+through real historical wind. Demo boats use PIN `0000`.
 
 ## How the game works
 
@@ -124,8 +123,8 @@ No PINs — proper navigator accounts (username + password, salted PBKDF2,
   from the server console as a recovery path.
 
 Boats created before accounts existed can be **claimed once** with their old
-PIN from the race page. The per-race `admin_key` still works for scripted
-admin API calls.
+PIN from the race page. Race management goes through admin accounts only —
+the per-race admin keys of early versions are no longer issued or accepted.
 
 ## Auto-creating a race from the Notice of Race / SIs
 
@@ -163,7 +162,7 @@ The integration surface is deliberately universal:
 
 ```
 GET  /api/races                      list races
-POST /api/races                      create (returns admin_key)
+POST /api/races                      create (admin account)
 GET  /api/races/<id>                 course + settings
 GET  /api/races/<id>/polar           the polar file
 GET  /api/races/<id>/state           leaderboard + fleet positions (advances the sim)
@@ -174,13 +173,13 @@ POST /api/boats/<id>/route           submit/update routing {waypoints|gpx|csv} (
 GET  /api/boats/<id>                 owner view incl. private future route
 POST /api/boats/<id>/claim           adopt a pre-account boat with its old PIN
 GET  /api/boats/<id>/track.gpx       sailed track export
-POST /api/races/<id>/real_boats      add tracked real boat {admin_key, name, klass}
-POST /api/real_boats/<id>/track      import tracker positions {admin_key, text}
+POST /api/races/<id>/real_boats      add tracked real boat {name, klass} (admin)
+POST /api/real_boats/<id>/track      import tracker positions {text} (admin)
 POST /api/races/from_docs            auto-create a race from NoR/SI uploads
 POST /api/races/<id>/docs            attach more documents (admin)
 GET  /api/races/<id>/docs            list race documents
 GET  /api/docs/<id>                  download a document
-POST /api/races/<id>/yb              link a yb.tl race {admin_key, slug, model_filter?}
+POST /api/races/<id>/yb              link a yb.tl race {slug, model_filter?} (admin)
 GET  /api/races/<id>/compare?real=&virtual=  gap split: boat speed / navigation / start
 GET  /api/races/<id>/forecasts       list on-board forecast snapshots
 GET  /api/forecasts/<id>.grb         download one snapshot as GRIB-1
