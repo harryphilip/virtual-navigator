@@ -23,8 +23,9 @@ from vn.nor import extract_race, MAX_DOC_BYTES
 from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to_gpx
 from vn.polar import Polar
 from vn.realfleet import ingest_points, recompute
-from vn.sim import (catch_up_race, dtf_nm, enforce_course, get_marks, mark_side,
-                    race_bbox, race_polar, race_zones)
+from vn.geo import bearing_deg, haversine_nm
+from vn.sim import (SimBusy, catch_up_race, dtf_nm, enforce_course, get_marks, mark_side,
+                    race_bbox, race_polar, race_zones, sim_lock)
 from vn.wind import heal_fallback, wind_health
 
 app = Flask(__name__, static_folder="public", static_url_path="")
@@ -88,6 +89,15 @@ def _parse_time(s):
 
 def _race_or_404(db, race_id):
     return db.execute("SELECT * FROM races WHERE id=?", (race_id,)).fetchone()
+
+
+def _freshen(db, race_id, now=None):
+    """Read paths serve stored state. With the ticker running that state is
+    at most a minute old and every request would otherwise queue behind the
+    engine lock; without it (tests, a one-off shell) the request advances
+    the race itself."""
+    if not _ticker_started:
+        catch_up_race(db, race_id, now)
 
 
 def _decimate(rows, cap=TRACK_MAX_POINTS):
@@ -418,7 +428,7 @@ def race_state(race_id):
     if not r:
         return _err("race not found", 404)
     now = int(time.time())
-    catch_up_race(db, race_id, now)
+    _freshen(db, race_id, now)
     marks = get_marks(db, race_id)
     course_len = dtf_nm(marks[0]["lat"], marks[0]["lon"], marks, 1) if len(marks) > 1 else 0
 
@@ -732,63 +742,73 @@ def submit_route(boat_id):
             "submitting against fake weather wouldn't be fair. The server "
             "retries every 15 minutes; see the committee log for recovery.", 503)
 
+    # everything that can be rejected is rejected before anything is written
     if "gpx" in d or "csv" in d:
         try:
             wps = parse_route(d.get("gpx") or d.get("csv"))
         except Exception as e:
             return _err(f"could not parse route file: {e}")
     else:
-        wps = [(float(p[0]), float(p[1])) for p in d.get("waypoints", [])]
+        try:
+            wps = [(float(p[0]), float(p[1])) for p in d.get("waypoints", [])]
+        except (TypeError, ValueError, IndexError):
+            return _err("waypoints must be [lat, lon] pairs")
     if not wps:
         return _err("no waypoints found in submission")
     if len(wps) > 10000:
         return _err("too many waypoints (max 10,000)")
-
-    marks = get_marks(db, race["id"])
-
-    if b["sim_time"] is None:
-        # first routing: boat starts at the start line, never earlier than now
-        start_at = max(race["start_time"], now)
-        db.execute("UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=1 WHERE id=?",
-                   (start_at, marks[0]["lat"], marks[0]["lon"], b["id"]))
-        db.commit()
-        b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
-    else:
-        catch_up_race(db, race["id"], now)   # lock the past before editing
-        b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
-        if b["finished_at"]:
-            return _err("boat has finished — routing is closed", 409)
-
-    # softly reconcile the routing with the course: join a re-uploaded
-    # routing at the boat (course-over-ground aware, so out-and-back legs
-    # can't fool it), skip waypoints already underfoot, and make sure every
-    # remaining mark (finish included) is actually visited — inserted, not
-    # disqualified, when the routing's own mark placement differs
-    last2 = db.execute("SELECT lat,lon FROM track WHERE boat_id=? "
-                       "ORDER BY t DESC LIMIT 2", (boat_id,)).fetchall()
-    cog = None
-    if len(last2) == 2:
-        from vn.geo import bearing_deg, haversine_nm
-        if haversine_nm(last2[1]["lat"], last2[1]["lon"],
-                        last2[0]["lat"], last2[0]["lon"]) > 0.05:
-            cog = bearing_deg(last2[1]["lat"], last2[1]["lon"],
-                              last2[0]["lat"], last2[0]["lon"])
-    wps, adjustments = enforce_course(
-        wps, marks, b["next_mark"], race["mark_radius_nm"],
-        (b["lat"], b["lon"]), cog)
-
     for i, (lat, lon) in enumerate(wps):
         if not (-90 <= lat <= 90 and -180 <= lon <= 180):
             return _err(f"waypoint {i} out of range")
-    row = db.execute("SELECT COALESCE(MAX(seq),-1) m FROM route_wps WHERE boat_id=? AND passed=1",
-                     (boat_id,)).fetchone()
-    base = row["m"] + 1
-    db.execute("DELETE FROM route_wps WHERE boat_id=? AND passed=0", (boat_id,))
-    db.executemany("INSERT INTO route_wps(boat_id,seq,lat,lon) VALUES (?,?,?,?)",
-                   [(boat_id, base + i, lat, lon) for i, (lat, lon) in enumerate(wps)])
-    db.execute("INSERT INTO route_log(boat_id,submitted_at,wp_json) VALUES (?,?,?)",
-               (boat_id, now, json.dumps(wps)))
-    db.commit()
+
+    marks = get_marks(db, race["id"])
+
+    # the whole replacement runs under the engine lock: the boat is sailed up
+    # to now under its old routing, then the future is swapped, and no tick
+    # can slip in between and mark the new routing's head as already passed
+    try:
+        with sim_lock(timeout=30):
+            if b["sim_time"] is None:
+                # first routing: boat starts at the start line, never earlier than now
+                start_at = max(race["start_time"], now)
+                db.execute("UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=1 WHERE id=?",
+                           (start_at, marks[0]["lat"], marks[0]["lon"], b["id"]))
+            else:
+                catch_up_race(db, race["id"], now)   # lock the past before editing
+            b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
+            if b["finished_at"]:
+                db.rollback()
+                return _err("boat has finished — routing is closed", 409)
+
+            # softly reconcile the routing with the course: join a re-uploaded
+            # routing at the boat (course-over-ground aware, so out-and-back
+            # legs can't fool it), skip waypoints already underfoot, and make
+            # sure every remaining mark (finish included) is actually visited —
+            # inserted, not disqualified, when the routing's own mark placement
+            # differs
+            last2 = db.execute("SELECT lat,lon FROM track WHERE boat_id=? "
+                               "ORDER BY t DESC LIMIT 2", (boat_id,)).fetchall()
+            cog = None
+            if len(last2) == 2:
+                if haversine_nm(last2[1]["lat"], last2[1]["lon"],
+                                last2[0]["lat"], last2[0]["lon"]) > 0.05:
+                    cog = bearing_deg(last2[1]["lat"], last2[1]["lon"],
+                                      last2[0]["lat"], last2[0]["lon"])
+            wps, adjustments = enforce_course(
+                wps, marks, b["next_mark"], race["mark_radius_nm"],
+                (b["lat"], b["lon"]), cog)
+
+            row = db.execute("SELECT COALESCE(MAX(seq),-1) m FROM route_wps "
+                             "WHERE boat_id=? AND passed=1", (boat_id,)).fetchone()
+            base = row["m"] + 1
+            db.execute("DELETE FROM route_wps WHERE boat_id=? AND passed=0", (boat_id,))
+            db.executemany("INSERT INTO route_wps(boat_id,seq,lat,lon) VALUES (?,?,?,?)",
+                           [(boat_id, base + i, lat, lon) for i, (lat, lon) in enumerate(wps)])
+            db.execute("INSERT INTO route_log(boat_id,submitted_at,wp_json) VALUES (?,?,?)",
+                       (boat_id, now, json.dumps(wps)))
+            db.commit()
+    except SimBusy as e:
+        return _err(str(e), 503)
     return jsonify({"ok": True, "waypoints": len(wps),
                     "adjustments": adjustments,
                     "locked_until": b["sim_time"] if b["sim_time"] else None})
@@ -802,7 +822,7 @@ def boat_detail(boat_id):
     if err:
         return err
     race = _race_or_404(db, b["race_id"])
-    catch_up_race(db, race["id"])
+    _freshen(db, race["id"])
     b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
     marks = get_marks(db, race["id"])
     trk = db.execute("SELECT t,lat,lon,twd,tws,bsp,hdg FROM track WHERE boat_id=? ORDER BY t",
@@ -855,7 +875,7 @@ def boat_position(boat_id):
     b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
     if not b:
         return _err("boat not found", 404)
-    catch_up_race(db, b["race_id"])
+    _freshen(db, b["race_id"])
     fix = _boat_fix(db, b)
     if not fix:
         return _err("boat has not started yet", 404)
@@ -874,7 +894,7 @@ def boat_position_gpx(boat_id):
     b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
     if not b:
         return _err("boat not found", 404)
-    catch_up_race(db, b["race_id"])
+    _freshen(db, b["race_id"])
     fix = _boat_fix(db, b)
     if not fix:
         return _err("boat has not started yet", 404)
@@ -1069,7 +1089,7 @@ def race_compare(race_id):
             boat_id = int(request.args["virtual"])
         except ValueError:
             return _err("virtual=<boat id> must be a number")
-        catch_up_race(db, race_id)
+        _freshen(db, race_id)
         boat = db.execute("SELECT * FROM boats WHERE id=? AND race_id=?",
                           (boat_id, race_id)).fetchone()
         if not boat:
@@ -1128,6 +1148,7 @@ def download_forecast(snap_id):
 # watching), polls linked YB trackers, and captures forecast snapshots.
 
 TICK_SECONDS = 60
+MAX_STEPS_PER_TICK = 144    # 24 h of 10-minute steps: a long gap is spread over ticks
 YB_POLL_SECONDS = 600
 SNAPSHOT_SECONDS = 6 * 3600
 _yb_last = {}
@@ -1144,7 +1165,7 @@ def _tick():
         if now < r["start_time"] - 72 * 3600 or now > r["start_time"] + 60 * 86400:
             continue                                   # far from race window
         live.append(r)
-        catch_up_race(db, r["id"], now)
+        catch_up_race(db, r["id"], now, max_steps=MAX_STEPS_PER_TICK)
 
     # placeholder weather is refetched from here, on the cooldown, whether or
     # not a boat happens to cross the cell again
