@@ -5,11 +5,12 @@
 On Fly:  fly ssh console -C "python /app/scripts/heal_weather.py"
 
 A failed Open-Meteo fetch (rate limit, outage) caches synthetic wind /
-zero current for the whole ±7-day window, and boats then sail fake
-weather. get_wind/get_current retry such cells on a cooldown since the
-fix in vn/wind.py, but this clears the backlog at once: fallback rows
-are deleted and refetch lazily on next access. Boats that sailed fake
-wind still carry it in their tracks — restart_boat replays them clean.
+zero current for a short window, and boats sail that placeholder until
+it heals. The ticker refetches such cells itself every 15 minutes
+(vn.wind.heal_fallback), so this script is only the manual backstop:
+it deletes every fallback row at once so real data is refetched on next
+access. Boats that sailed fake wind still carry it in their tracks —
+restart_boat replays them clean.
 """
 import os
 import sys

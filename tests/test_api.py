@@ -142,10 +142,14 @@ def test_gpx_upload_is_reconciled_with_the_course(client):
     assert nav.post(f"/api/boats/{boat}/route", json={"gpx": "<gpx><broken"}).status_code == 400
 
 
-def test_uploads_pause_while_weather_is_degraded(client, db):
+def test_uploads_pause_only_for_the_race_whose_weather_is_degraded(client, db):
     admin, race = make_race_via_api()
+    far = [{"name": "Start", "lat": 40.0, "lon": -70.0},
+           {"name": "Finish", "lat": 40.5, "lon": -70.0}]
+    other = admin.post("/api/races", json=race_body(name="Far Race", marks=far)).get_json()["id"]
     nav = new_client("nav")
     boat = nav.post(f"/api/races/{race}/boats", json={"name": "Magpie"}).get_json()["boat_id"]
+    boat_far = nav.post(f"/api/races/{other}/boats", json={"name": "Magpie"}).get_json()["boat_id"]
     now = int(time.time())
     db.execute("INSERT INTO wind_cache(lat,lon,t,twd,tws,source) VALUES (0,0,?,0,10,'synthetic')",
                ((now // 3600) * 3600,))
@@ -153,3 +157,7 @@ def test_uploads_pause_while_weather_is_degraded(client, db):
     r = nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]})
     assert r.status_code == 503
     assert client.get(f"/api/races/{race}/state").get_json()["weather"]["degraded"] is True
+    # the race 40° away is unaffected
+    r = nav.post(f"/api/boats/{boat_far}/route", json={"waypoints": [[40.5, -70.0]]})
+    assert r.status_code == 200
+    assert client.get(f"/api/races/{other}/state").get_json()["weather"]["degraded"] is False
