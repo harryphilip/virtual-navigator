@@ -6,19 +6,24 @@ AISSTREAM_KEY secret, subscribes to the bounding box of every race flagged
 `ais` that is live.  Every position report inside a box is matched to that
 race's real_boats roster (scripts/link_ais.py): by MMSI once one is known,
 otherwise by the broadcast ship name — the first sailing/pleasure vessel
-whose name matches an unbound roster entry is bound to it and logged.
-scripts/set_mmsi.py overrides a wrong or missing match.  Positions go
+whose name matches an unbound roster entry is bound to it and logged, but
+only while it is under way and near the course: the box takes in every
+harbour from New York to Buzzards Bay, and a moored yacht that shares a
+common name must not claim a roster entry.  scripts/set_mmsi.py overrides
+a wrong or missing match.  Positions go
 through realfleet.ingest_points like YB points, at most one a minute per
 boat.
 """
 import datetime as dt
 import json
+import math
 import os
 import re
 import threading
 import time
 
 from .db import add_race_log, get_db
+from .geo import haversine_nm
 from .realfleet import ingest_points
 from .sim import get_marks
 import logging
@@ -32,6 +37,9 @@ STATIC_TYPES = ("ShipStaticData", "StaticDataReport")
 SAILING_TYPES = (36, 37)          # AIS ship type: sailing, pleasure craft
 MIN_POINT_GAP = 60                # seconds between stored points per boat
 BOX_MARGIN_DEG = 0.5              # ~30 nm around the course
+MIN_BIND_SOG_KN = 1.0             # name-bind only a vessel that is under way
+BIND_CORRIDOR_NM = 10.0           # ... and this close to a course leg
+SOG_NOT_AVAILABLE = 102.3         # AIS 'speed not available'
 SESSION_SECONDS = 300             # reconnect this often to pick up race changes
 PRE_START = 6 * 3600
 POST_START = 10 * 86400
@@ -90,6 +98,37 @@ def report_position(meta, body):
         if lat is not None and lon is not None and abs(lat) <= 90 and abs(lon) <= 180:
             return float(lat), float(lon)
     return None, None
+
+
+def report_sog(body):
+    """Speed over ground from a position report, None when not broadcast."""
+    sog = body.get("Sog")
+    if sog is None:
+        return None
+    try:
+        sog = float(sog)
+    except (TypeError, ValueError):
+        return None
+    return None if sog < 0 or sog >= SOG_NOT_AVAILABLE else sog
+
+
+def course_distance_nm(lat, lon, marks):
+    """Distance from a point to the nearest course leg, on a flat local
+    chart — good to a few percent at these scales."""
+    if len(marks) < 2:
+        return haversine_nm(lat, lon, marks[0]["lat"], marks[0]["lon"]) if marks else 0.0
+    best = None
+    for a, b in zip(marks, marks[1:]):
+        k = math.cos(math.radians(lat))
+        ax, ay = (a["lon"] - lon) * k, a["lat"] - lat
+        bx, by = (b["lon"] - lon) * k, b["lat"] - lat
+        dx, dy = bx - ax, by - ay
+        L2 = dx * dx + dy * dy
+        u = 0.0 if L2 == 0 else max(0.0, min(1.0, -(ax * dx + ay * dy) / L2))
+        px, py = ax + u * dx, ay + u * dy
+        d = math.hypot(px, py) * 60.0
+        best = d if best is None else min(best, d)
+    return best
 
 
 def race_box(marks, margin=BOX_MARGIN_DEG):
@@ -164,7 +203,8 @@ class AISFeed(threading.Thread):
             "by_mmsi": {r["mmsi"]: r["id"] for r in rows if r["mmsi"]},
             "unbound": [dict(r) for r in rows if not r["mmsi"]]}
 
-    def _boat_for(self, db, race, mmsi, ship_name):
+    def _boat_for(self, db, race, mmsi, ship_name, lat=None, lon=None,
+                  sog=None, marks=None):
         ro = self.rosters[race["id"]]
         if mmsi in ro["by_mmsi"]:
             return ro["by_mmsi"][mmsi]
@@ -172,6 +212,11 @@ class AISFeed(threading.Thread):
             return None
         stype = self.types.get(mmsi)
         if stype is not None and stype not in SAILING_TYPES:
+            return None
+        # a name alone is not enough: the vessel must be racing, not moored
+        if sog is None or sog < MIN_BIND_SOG_KN:
+            return None
+        if marks and lat is not None and course_distance_nm(lat, lon, marks) > BIND_CORRIDOR_NM:
             return None
         for rb in ro["unbound"]:
             if name_matches(ship_name, rb["name"]):
@@ -207,16 +252,19 @@ class AISFeed(threading.Thread):
             return 0
         if mt not in POSITION_TYPES:
             return 0
-        lat, lon = report_position(meta, (msg.get("Message") or {}).get(mt) or {})
+        body = (msg.get("Message") or {}).get(mt) or {}
+        lat, lon = report_position(meta, body)
         if lat is None:
             return 0
+        sog = report_sog(body)
         t = parse_time(meta.get("time_utc")) or int(time.time())
         stored = 0
         for race in races:
             box = race_box(marks[race["id"]])
             if not (box[0][0] <= lat <= box[1][0] and box[0][1] <= lon <= box[1][1]):
                 continue
-            rb_id = self._boat_for(db, race, mmsi, meta.get("ShipName"))
+            rb_id = self._boat_for(db, race, mmsi, meta.get("ShipName"),
+                                   lat, lon, sog, marks[race["id"]])
             if rb_id is None:
                 continue
             if t - self.last_pt.get(rb_id, 0) < MIN_POINT_GAP:

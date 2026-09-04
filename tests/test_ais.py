@@ -12,14 +12,14 @@ from vn import ais
 COWS = (41.00359, -73.52394)
 
 
-def envelope(mmsi, name, lat, lon, t, meta_case="lower", body=True):
+def envelope(mmsi, name, lat, lon, t, meta_case="lower", body=True, sog=6.1):
     stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(t)) + ".123456789 +0000 UTC"
     meta = {"MMSI": mmsi, "MMSI_String": mmsi, "ShipName": name, "time_utc": stamp}
     if meta_case == "lower":
         meta.update(latitude=lat, longitude=lon)
     elif meta_case == "upper":
         meta.update(Latitude=lat, Longitude=lon)
-    report = {"MessageID": 1, "UserID": mmsi, "Sog": 6.1, "Cog": 80.0, "Valid": True}
+    report = {"MessageID": 1, "UserID": mmsi, "Sog": sog, "Cog": 80.0, "Valid": True}
     if body:
         report.update(Latitude=lat, Longitude=lon)
     return {"MessageType": "PositionReport", "MetaData": meta,
@@ -91,3 +91,58 @@ def test_not_available_position_is_dropped(db):
     race, marks, feed = vineyard(db)
     msg = envelope(367123456, "MONEYBALL", 91.0, 181.0, int(time.time()) - 60)
     assert feed._handle(db, msg, [race], marks) == 0
+
+
+# ---- binding gates: a name alone is not enough ---------------------------
+
+def test_moored_vessel_with_a_roster_name_is_not_bound(db):
+    race, marks, feed = vineyard(db)
+    msg = envelope(367123456, "MONEYBALL", 41.05, -73.45, int(time.time()) - 60, sog=0.0)
+    assert feed._handle(db, msg, [race], marks) == 0
+    assert boat(db, race)["mmsi"] is None
+    assert boat(db, race)["last_t"] is None
+
+
+def test_vessel_without_a_speed_is_not_bound(db):
+    race, marks, feed = vineyard(db)
+    msg = envelope(367123456, "MONEYBALL", 41.05, -73.45, int(time.time()) - 60, sog=102.3)
+    assert feed._handle(db, msg, [race], marks) == 0
+    assert boat(db, race)["mmsi"] is None
+
+
+def test_vessel_under_way_far_from_the_course_is_not_bound(db):
+    race, marks, feed = vineyard(db)
+    # New Bedford harbour: inside the box, 15 nm from the nearest leg
+    msg = envelope(367123456, "MONEYBALL", 41.6386, -70.9185, int(time.time()) - 60, sog=5.0)
+    assert feed._handle(db, msg, [race], marks) == 0
+    assert boat(db, race)["mmsi"] is None
+
+
+def test_bound_boat_is_followed_anywhere_in_the_box(db):
+    race, marks, feed = vineyard(db)
+    db.execute("UPDATE real_boats SET mmsi=367123456 WHERE race_id=?", (race["id"],))
+    db.commit()
+    feed._load_roster(db, race["id"])
+    # drifting, well off the rhumb line: still her, still stored
+    msg = envelope(367123456, "MONEYBALL", 41.6386, -70.9185, int(time.time()) - 60, sog=0.0)
+    assert feed._handle(db, msg, [race], marks) == 1
+
+
+def test_course_distance():
+    marks = [{"lat": 41.0, "lon": -73.5}, {"lat": 41.0, "lon": -71.0}]
+    assert abs(ais.course_distance_nm(41.0, -72.0, marks)) < 0.01        # on the leg
+    assert abs(ais.course_distance_nm(41.1, -72.0, marks) - 6.0) < 0.1   # 6' north of it
+    assert abs(ais.course_distance_nm(41.0, -70.5, marks) - 22.6) < 0.5  # beyond the end
+
+
+def test_set_mmsi_wipe_clears_binding_and_track(db):
+    race, marks, feed = vineyard(db)
+    t = int(time.time()) - 60
+    assert feed._handle(db, envelope(367123456, "MONEYBALL", 41.01, -73.40, t), [race], marks) == 1
+    import importlib
+    set_mmsi = importlib.import_module("scripts.set_mmsi")
+    set_mmsi.main([str(race["id"]), "Moneyball", "none", "--wipe"])
+    rb = boat(db, race)
+    assert rb["mmsi"] is None and rb["last_t"] is None and rb["next_mark"] == 1
+    assert db.execute("SELECT COUNT(*) c FROM real_track WHERE rb_id=?",
+                      (rb["id"],)).fetchone()["c"] == 0
