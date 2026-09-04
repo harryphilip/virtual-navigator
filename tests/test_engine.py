@@ -28,6 +28,36 @@ def test_boat_sails_to_waypoints_in_order_and_locks_them(db, weather):
     assert {r[7] for r in rows} == {"test"}              # wind source is on the track
 
 
+def test_catch_up_can_be_capped_and_resumed(db, weather):
+    race = make_race(db, [START, FINISH])
+    boat = make_boat(db, race, started_at=0)
+    set_route(db, boat, [(-0.5, 0.0)])
+    catch_up_race(db, race, now=48 * H, max_steps=6)
+    assert boat_row(db, boat)["sim_time"] == H                 # one hour, not two days
+    catch_up_race(db, race, now=48 * H, max_steps=6)
+    assert boat_row(db, boat)["sim_time"] == 2 * H
+    catch_up_race(db, race, now=48 * H)
+    assert boat_row(db, boat)["finished_at"] is not None
+
+
+def test_an_idle_boat_is_not_rewritten(db, weather):
+    race = make_race(db, [START, FINISH])
+    boat = make_boat(db, race, started_at=0)
+    set_route(db, boat, [(-0.5, 0.0)])
+    catch_up_race(db, race, now=H)
+    before = db.total_changes
+    catch_up_race(db, race, now=H + 60)                         # less than a step
+    assert db.total_changes == before
+
+
+def test_zero_step_is_refused_not_spun(db, weather):
+    race = make_race(db, [START, FINISH], step_minutes=0)
+    boat = make_boat(db, race, started_at=0)
+    set_route(db, boat, [(-0.5, 0.0)])
+    with pytest.raises(ValueError):
+        catch_up_race(db, race, now=H)
+
+
 def test_boat_with_no_route_parks(db, weather):
     race = make_race(db, [START, FINISH])
     boat = make_boat(db, race, started_at=0)

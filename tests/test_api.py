@@ -161,3 +161,64 @@ def test_uploads_pause_only_for_the_race_whose_weather_is_degraded(client, db):
     r = nav.post(f"/api/boats/{boat_far}/route", json={"waypoints": [[40.5, -70.0]]})
     assert r.status_code == 200
     assert client.get(f"/api/races/{other}/state").get_json()["weather"]["degraded"] is False
+
+
+# ---- engine lock and read paths --------------------------------------------
+
+def test_route_submission_waits_for_the_engine_lock(client, db, monkeypatch):
+    """A tick that is mid-advance must finish before a new routing lands,
+    or the tick's stale read could mark the new routing's head as passed."""
+    import threading
+    import vn.sim as sim
+
+    admin, race = make_race_via_api(start_time=int(time.time()) - 7200)
+    nav = new_client("nav")
+    boat = nav.post(f"/api/races/{race}/boats", json={"name": "Magpie"}).get_json()["boat_id"]
+    assert nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]}).status_code == 200
+
+    order, done, real = [], threading.Event(), sim._advance
+    armed = [True]
+
+    def slow_advance(*a, **k):
+        if armed[0]:
+            armed[0] = False
+            def submit():
+                r = nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.3, 0.1], [-0.5, 0.0]]})
+                order.append(("submit", r.status_code))
+                done.set()
+            threading.Thread(target=submit, daemon=True).start()
+            time.sleep(0.5)                      # the submission is now waiting on the lock
+            order.append(("advance", None))
+        return real(*a, **k)
+
+    monkeypatch.setattr(sim, "_advance", slow_advance)
+    sim.catch_up_race(db, race, now=int(time.time()))
+    assert done.wait(10)
+    assert order == [("advance", None), ("submit", 200)]
+
+
+def test_read_paths_serve_stored_state_when_the_ticker_runs(client, db, monkeypatch):
+    import app as appmod
+    admin, race = make_race_via_api(start_time=int(time.time()) - 7200)
+    nav = new_client("nav")
+    boat = nav.post(f"/api/races/{race}/boats", json={"name": "Magpie"}).get_json()["boat_id"]
+    nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]})
+    db.execute("UPDATE boats SET sim_time=? WHERE id=?", (int(time.time()) - 3600, boat))
+    db.commit()
+    monkeypatch.setattr(appmod, "_ticker_started", True)
+    client.get(f"/api/races/{race}/state")
+    assert db.execute("SELECT COUNT(*) c FROM track WHERE boat_id=?", (boat,)).fetchone()["c"] == 0
+    monkeypatch.setattr(appmod, "_ticker_started", False)
+    client.get(f"/api/races/{race}/state")
+    assert db.execute("SELECT COUNT(*) c FROM track WHERE boat_id=?", (boat,)).fetchone()["c"] > 0
+
+
+def test_bad_waypoint_shapes_are_rejected_before_the_boat_starts(client, db):
+    admin, race = make_race_via_api()
+    nav = new_client("nav")
+    boat = nav.post(f"/api/races/{race}/boats", json={"name": "Magpie"}).get_json()["boat_id"]
+    assert nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[91.0, 0.0]]}).status_code == 400
+    assert nav.post(f"/api/boats/{boat}/route", json={"waypoints": ["x"]}).status_code == 400
+    assert nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[1.0]]}).status_code == 400
+    # nothing was written: the boat has not started
+    assert db.execute("SELECT sim_time FROM boats WHERE id=?", (boat,)).fetchone()["sim_time"] is None

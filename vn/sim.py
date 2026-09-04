@@ -18,8 +18,32 @@ from .geo import angle_diff, haversine_nm, bearing_deg, destination, point_in_po
 from .polar import Polar
 from .wind import get_wind, get_current
 
-_sim_lock = threading.Lock()
+_sim_lock = threading.RLock()
 _polar_cache = {}
+
+
+class SimBusy(Exception):
+    """The engine held the lock longer than the caller was willing to wait."""
+
+
+class sim_lock:
+    """Hold the engine lock: `with sim_lock(timeout=5): ...`.
+
+    Re-entrant, so a caller that already holds it can call catch_up_race()
+    inside. Route replacement runs under it so a tick can never read the old
+    routing, then mark the head of the new one as already passed."""
+
+    def __init__(self, timeout=-1):
+        self.timeout = timeout
+
+    def __enter__(self):
+        if not _sim_lock.acquire(timeout=self.timeout):
+            raise SimBusy("the race engine is busy; try again in a moment")
+        return self
+
+    def __exit__(self, *exc):
+        _sim_lock.release()
+        return False
 
 
 def race_polar(race):
@@ -47,8 +71,14 @@ def race_bbox(db, race_id, margin_deg=3.0):
             min(lons) - margin_deg, max(lons) + margin_deg)
 
 
-def catch_up_race(db, race_id, now=None):
-    """Advance every virtual boat in the race to `now`."""
+def catch_up_race(db, race_id, now=None, max_steps=None):
+    """Advance every virtual boat in the race toward `now`.
+
+    Each boat is committed as soon as it is advanced, so a long catch-up
+    (after a deploy, say) never holds one open write transaction across the
+    whole fleet. With `max_steps` a boat advances at most that many steps
+    per call; the ticker uses this to spread a big gap over several ticks
+    instead of stalling every request behind one enormous one."""
     now = int(now or time.time())
     with _sim_lock:
         race = db.execute("SELECT * FROM races WHERE id=?", (race_id,)).fetchone()
@@ -61,8 +91,8 @@ def catch_up_race(db, race_id, now=None):
             "SELECT * FROM boats WHERE race_id=? AND sim_time IS NOT NULL",
             (race_id,)).fetchall()
         for boat in boats:
-            _advance(db, race, polar, marks, zones, boat, now)
-        db.commit()
+            if _advance(db, race, polar, marks, zones, boat, now, max_steps):
+                db.commit()
 
 
 def race_zones(race):
@@ -73,13 +103,16 @@ def race_zones(race):
         return []
 
 
-def _advance(db, race, polar, marks, zones, boat, until):
+def _advance(db, race, polar, marks, zones, boat, until, max_steps=None):
+    """Sail one boat forward. Returns True if anything was written."""
     if boat["finished_at"] is not None:
-        return
+        return False
     step = race["step_minutes"] * 60
+    if step <= 0:
+        raise ValueError(f"race {race['id']}: step_minutes must be positive")
     t = boat["sim_time"]
     if t is None or until <= t:
-        return
+        return False
     lat, lon = boat["lat"], boat["lon"]
     next_mark = boat["next_mark"]
     finished = None
@@ -98,6 +131,8 @@ def _advance(db, race, polar, marks, zones, boat, until):
     points = []
 
     while t + step <= until and finished is None:
+        if max_steps is not None and len(points) >= max_steps:
+            break
         t2 = t + step
         path = [(lat, lon)]          # every position the boat occupies this step
         twd, tws, src = get_wind(db, lat, lon, t)
@@ -184,10 +219,11 @@ def _advance(db, race, polar, marks, zones, boat, until):
         points.append((boat["id"], t2, lat, lon, twd, tws, bsp, hdg, src))
         t = t2
 
-    if points:
-        db.executemany(
-            "INSERT OR REPLACE INTO track(boat_id,t,lat,lon,twd,tws,bsp,hdg,src) "
-            "VALUES (?,?,?,?,?,?,?,?,?)", points)
+    if not points:
+        return False                      # less than a step to sail: nothing to write
+    db.executemany(
+        "INSERT OR REPLACE INTO track(boat_id,t,lat,lon,twd,tws,bsp,hdg,src) "
+        "VALUES (?,?,?,?,?,?,?,?,?)", points)
     if passed_wps:
         db.execute(
             "UPDATE route_wps SET passed=1 WHERE boat_id=? AND seq<=?",
@@ -197,6 +233,7 @@ def _advance(db, race, polar, marks, zones, boat, until):
         "wind_side=?, maneuvers=?, groundings=?, zone_steps=? WHERE id=?",
         (t, lat, lon, next_mark, finished, side, maneuvers, groundings,
          zone_steps, boat["id"]))
+    return True
 
 
 MARK_SIDES = ("port", "stbd")
