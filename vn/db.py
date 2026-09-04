@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS track (
   t INTEGER NOT NULL,
   lat REAL, lon REAL,
   twd REAL, tws REAL, bsp REAL, hdg REAL,
+  src TEXT,                             -- wind source sailed: open-meteo | synthetic
   PRIMARY KEY (boat_id, t)
 );
 CREATE TABLE IF NOT EXISTS real_boats (
@@ -170,6 +171,7 @@ MIGRATIONS = [
     "ALTER TABLE races ADD COLUMN ais INTEGER DEFAULT 0",
     "ALTER TABLE real_boats ADD COLUMN mmsi INTEGER",
     "ALTER TABLE real_boats ADD COLUMN sail_no TEXT",
+    "ALTER TABLE track ADD COLUMN src TEXT",
 ]
 
 

@@ -186,6 +186,18 @@ def main():
         print(f"  track touches {len(cells)} cell(s) the boat actually sailed")
         print(f"  => {'CLEAN — every wind row it sailed was recorded' if not bad
                      else f'{bad} INVENTED wind row(s) in the sailed cells'}")
+        # the track itself records the source each fix was sailed with, which
+        # is the truth even where the cache has since been healed or purged
+        # (fixes written before the column existed carry no source)
+        srcs = {r["src"]: r["n"] for r in db.execute(
+            "SELECT src, COUNT(*) n FROM track WHERE boat_id=? AND t>=? GROUP BY src",
+            (boat["id"], since))}
+        if any(k is not None for k in srcs):
+            invented = sum(n for s, n in srcs.items() if s in ("synthetic", "none"))
+            print("  fixes by wind source on the track: " + ", ".join(
+                f"{s or 'unrecorded'}={n}" for s, n in sorted(srcs.items(), key=lambda kv: -kv[1])))
+            print(f"  => {'CLEAN — every fix sailed recorded wind' if not invented
+                         else f'{invented} fix(es) sailed placeholder wind'}")
     print("\n(read-only: this script changed nothing)")
 
 

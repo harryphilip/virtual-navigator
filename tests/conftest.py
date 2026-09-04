@@ -114,7 +114,7 @@ def boat_row(db, boat_id):
 
 def track_rows(db, boat_id):
     return [tuple(r) for r in db.execute(
-        "SELECT t,lat,lon,twd,tws,bsp,hdg FROM track WHERE boat_id=? ORDER BY t",
+        "SELECT t,lat,lon,twd,tws,bsp,hdg,src FROM track WHERE boat_id=? ORDER BY t",
         (boat_id,))]
 
 
