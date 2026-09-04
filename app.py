@@ -117,7 +117,7 @@ def _rate_limited(kind, key=None):
 
 
 def _too_many(wait):
-    resp = jsonify({"error": f"too many attempts; try again in {wait} s"})
+    resp = jsonify({"error": f"Too many attempts. Try again in {wait} s."})
     resp.status_code = 429
     resp.headers["Retry-After"] = str(wait)
     return resp
@@ -182,10 +182,10 @@ def auth_register():
     d = request.get_json(force=True)
     username = (d.get("username") or "").strip().lower()
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{2,29}", username):
-        return _err("username: 3-30 chars, letters/digits/dash/underscore")
+        return _err("Username must be 3 to 30 characters: letters, digits, dash or underscore.")
     password = d.get("password") or ""
     if len(password) < 6:
-        return _err("password must be at least 6 characters")
+        return _err("Password must be at least 6 characters.")
     salt = secrets.token_hex(16)
     first = db.execute("SELECT COUNT(*) c FROM users").fetchone()["c"] == 0
     try:
@@ -195,7 +195,7 @@ def auth_register():
             (username, (d.get("display_name") or "").strip()[:60], salt,
              _hash_pw(password, salt), 1 if first else 0, int(time.time())))
     except Exception:
-        return _err("that username is taken", 409)
+        return _err("That username is taken. Pick another, or sign in if it is yours.", 409)
     db.commit()
     u = db.execute("SELECT * FROM users WHERE id=?", (cur.lastrowid,)).fetchone()
     resp = jsonify({"ok": True, "user": _user_json(u), "first_admin": first})
@@ -212,7 +212,7 @@ def auth_login():
     u = db.execute("SELECT * FROM users WHERE username=?",
                    ((d.get("username") or "").strip().lower(),)).fetchone()
     if not u or _hash_pw(d.get("password") or "", u["salt"]) != u["pass_hash"]:
-        return _err("wrong username or password", 403)
+        return _err("Wrong username or password.", 403)
     resp = jsonify({"ok": True, "user": _user_json(u)})
     return _start_session(resp, db, u["id"])
 
@@ -315,7 +315,7 @@ def create_race():
     db = get_db()
     u = current_user(db)
     if not (u and u["is_admin"]):
-        return _err("only admin accounts can create races — sign in as an admin", 403)
+        return _err("Only admins can create races.", 403)
     d = request.get_json(force=True)
     try:
         name = d["name"].strip()
@@ -584,7 +584,7 @@ def race_from_docs():
     db = get_db()
     u = current_user(db)
     if not (u and u["is_admin"]):
-        return _err("only admin accounts can create races — sign in as an admin", 403)
+        return _err("Only admins can create races.", 403)
     try:
         docs = _read_uploads(request)
     except ValueError as e:
@@ -715,18 +715,18 @@ def register_boat(race_id):
         return _err("race not found", 404)
     u = current_user(db)
     if not u:
-        return _err("sign in to register a boat", 401)
+        return _err("Sign in to do that.", 401)
     d = request.get_json(force=True)
     name = (d.get("name") or "").strip()
     if not name:
-        return _err("boat name is required")
+        return _err("Give the boat a name.")
     try:
         cur = db.execute(
             "INSERT INTO boats(race_id,name,pin_hash,created_at,owner_id) "
             "VALUES (?,?,'',?,?)",
             (race_id, name, int(time.time()), u["id"]))
     except Exception:
-        return _err("a boat with that name already exists in this race", 409)
+        return _err(f"There is already a {name} in this race. Choose another name.", 409)
     db.commit()
     return jsonify({"boat_id": cur.lastrowid})
 
@@ -752,7 +752,7 @@ def claim_boat(boat_id):
     db = get_db()
     u = current_user(db)
     if not u:
-        return _err("sign in first", 401)
+        return _err("Sign in to do that.", 401)
     b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
     if not b:
         return _err("boat not found", 404)
@@ -773,7 +773,7 @@ def _auth_boat(db, boat_id):
         return None, _err("boat not found", 404)
     u = current_user(db)
     if not u:
-        return None, _err("sign in to manage this boat", 401)
+        return None, _err("Sign in to do that.", 401)
     if b["owner_id"] != u["id"] and not u["is_admin"]:
         return None, _err("this boat belongs to another navigator", 403)
     return b, None
@@ -803,29 +803,28 @@ def submit_route(boat_id):
     wx = wind_health(db, now, race_bbox(db, race["id"]))
     if wx["degraded"]:
         return _err(
-            "routing uploads are paused: the weather source is unreachable and "
-            f"{wx['synthetic_cells']} wind cell(s) hold placeholder data — "
-            "submitting against fake weather wouldn't be fair. The server "
-            "retries every 15 minutes; see the committee log for recovery.", 503)
+            "Route submissions are paused while the weather feed is down "
+            f"({wx['synthetic_cells']} wind cell(s) hold placeholder data). "
+            "Retrying every 15 minutes; see the committee log.", 503)
 
     # everything that can be rejected is rejected before anything is written
     if "gpx" in d or "csv" in d:
         try:
             wps = parse_route(d.get("gpx") or d.get("csv"))
         except Exception as e:
-            return _err(f"could not parse route file: {e}")
+            return _err("Couldn't read that file. Upload a GPX route or track, or a CSV with lat and lon columns.")
     else:
         try:
             wps = [(float(p[0]), float(p[1])) for p in d.get("waypoints", [])]
         except (TypeError, ValueError, IndexError):
             return _err("waypoints must be [lat, lon] pairs")
     if not wps:
-        return _err("no waypoints found in submission")
+        return _err("No waypoints found. The file needs at least one position.")
     if len(wps) > 10000:
         return _err("too many waypoints (max 10,000)")
     for i, (lat, lon) in enumerate(wps):
         if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-            return _err(f"waypoint {i} out of range")
+            return _err(f"Waypoint {i + 1} is not a valid position (latitude ±90, longitude ±180).")
 
     marks = get_marks(db, race["id"])
 
@@ -844,7 +843,7 @@ def submit_route(boat_id):
             b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
             if b["finished_at"]:
                 db.rollback()
-                return _err("boat has finished — routing is closed", 409)
+                return _err("This boat has finished; the route can't be changed.", 409)
 
             # softly reconcile the routing with the course: join a re-uploaded
             # routing at the boat (course-over-ground aware, so out-and-back
@@ -1257,12 +1256,12 @@ def _tick():
         wx = wind_health(db, now, race_bbox(db, r["id"]))
         prev = _wx_degraded.get(r["id"])
         if prev is not None and wx["degraded"] != prev:
-            msg = (f"⚠ Weather source degraded: {wx['synthetic_cells']} wind "
-                   "cell(s) fell back to placeholder data (API unreachable). "
-                   "Routing uploads are paused; the server retries every 15 min."
+            msg = (f"Weather feed down: {wx['synthetic_cells']} wind cell(s) hold "
+                   "placeholder data. Route submissions are paused; retrying "
+                   "every 15 minutes."
                    if wx["degraded"] else
-                   "Weather source restored — all wind cells carry real data "
-                   "again; routing uploads reopened.")
+                   "Weather feed restored: every wind cell carries real data "
+                   "again; route submissions reopened.")
             add_race_log(db, r["id"], msg)
             db.commit()
             print(f"[ticker] race {r['id']}: {msg}")

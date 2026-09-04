@@ -11,7 +11,7 @@ def test_login_attempts_are_limited_per_ip(client):
     r = client.post("/api/auth/login", json={"username": "carol", "password": "hunter22"})
     assert r.status_code == 429
     assert int(r.headers["Retry-After"]) >= 1
-    assert "try again" in r.get_json()["error"]
+    assert "try again" in r.get_json()["error"].lower()
 
 
 def test_limits_are_per_client_ip(client):

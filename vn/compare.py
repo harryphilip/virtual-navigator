@@ -267,7 +267,7 @@ def compare(db, race, marks, rb, boat=None, now=None):
     t_r = time_at(rprog, target)
     t_v = time_at(vprog, target)
     if t_r is None or t_v is None:      # cannot happen: the trailer defines target
-        raise CompareError("boats have no common progress point yet")
+        raise CompareError("Nothing to compare until both boats have passed the same point on the course.")
 
     real = _boat_block(db, race, polar, rb["id"], rb["name"], rb["klass"] or "",
                        rpts, t0_r, t_r, now, notes)

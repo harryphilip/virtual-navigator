@@ -56,7 +56,7 @@ def test_resubmission_joins_ahead_of_the_boat():
     wps = [(0.0, 0.1), (0.0, 0.3), (0.0, 0.6), (0.0, 1.0)]
     out, notes = enforce_course(wps, [START, FINISH], 1, R, start_pos=(0.0, 0.5))
     assert out == [(0.0, 0.6), (0.0, 1.0)]
-    assert any("joined" in n for n in notes)
+    assert any("Joined" in n for n in notes)
 
 
 def test_correct_side_pass_is_left_alone():
@@ -71,7 +71,7 @@ def test_wrong_side_pass_is_rebuilt_as_a_rounding():
     turn = mk("Turn", 0.0, 0.5, "stbd")
     wps = [(-0.02, 0.4), (-0.02, 0.5), (-0.02, 0.6), (0.0, 1.0)]
     out, notes = enforce_course(wps, [START, turn, FINISH], 1, R)
-    assert any("does not leave Turn to starboard" in n for n in notes)
+    assert any("passes Turn on the wrong side" in n and "starboard" in n for n in notes)
     assert len(out) > len(wps)
     # the rebuilt pass stays close to the mark, on the north side
     near = [p for p in out if haversine_nm(p[0], p[1], 0.0, 0.5) <= R]
@@ -84,7 +84,7 @@ def test_leg_straight_over_a_sided_mark_is_rebuilt():
     turn = mk("Turn", 0.0, 0.5, "port")
     wps = [(0.0, 0.4), (0.0, 0.5), (0.0, 0.6), (0.0, 1.0)]
     out, notes = enforce_course(wps, [START, turn, FINISH], 1, R)
-    assert any("does not leave Turn to port" in n for n in notes)
+    assert any("passes Turn on the wrong side" in n and "to port" in n for n in notes)
     assert (0.0, 0.5) not in out
 
 

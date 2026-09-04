@@ -56,7 +56,7 @@ def main():
             added += 1
     db.execute("UPDATE races SET ais=1 WHERE id=?", (race_id,))
     add_race_log(db, race_id,
-                 f"Real fleet entered from the scratch sheet: {len(rows)} boat(s)"
+                 f"Real fleet entered from the scratch sheet: {len(rows)} boat{'s' if len(rows) != 1 else ''}"
                  f"{' on the ' + sys.argv[3].strip() + ' course' if area else ''}, "
                  "followed over AIS. Each shows as not started until its transponder "
                  "is heard on the course.")

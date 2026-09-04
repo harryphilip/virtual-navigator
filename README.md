@@ -1,10 +1,13 @@
 # Virtual Navigator
 
-Fantasy offshore racing. Pick a race, register a virtual boat, and submit a
-route, drawn on the map or exported from your own navigation software. Every
-virtual boat sails the **same polar** through the **same real weather**, and
-the leaderboard ranks the virtual fleet alongside the **real boats on the
-tracker**.
+Route the real race; sail the real weather. Pick an offshore race that is
+actually on, enter a virtual boat, and submit a route, drawn on the chart or
+exported from your own navigation software. Every virtual boat sails the
+**same polar** through the **same real weather**, and the leaderboard ranks
+the virtual fleet alongside the **real boats on the tracker**.
+
+Live at https://virtual-navigator.fly.dev. Status: a single-server project
+run by one committee for a club-sized fleet.
 
 ## Quick start
 
@@ -16,7 +19,7 @@ python3 -m venv .venv
 ```
 
 The demo seeds a Newport→Bermuda challenge that started 36 h ago, simulated
-through real historical wind. Demo boats use PIN `0000`.
+through real historical wind.
 
 ## How the game works
 
@@ -118,8 +121,9 @@ through real historical wind. Demo boats use PIN `0000`.
 
 ## Accounts & roles
 
-No PINs — proper navigator accounts (username + password, salted PBKDF2,
-90-day session cookies). Two roles on one account type:
+Navigator accounts are a username and a password (salted PBKDF2, 90-day
+session cookies); no email is collected, so there is no password reset. Two
+roles on one account type:
 
 - **Navigators** register boats in races, submit routings, and get a public
   profile page (`/user?u=<name>`) showing every race they've sailed, results
@@ -132,9 +136,7 @@ No PINs — proper navigator accounts (username + password, salted PBKDF2,
   last admin can't be removed), and `scripts/make_admin.py <username>` works
   from the server console as a recovery path.
 
-Boats created before accounts existed can be **claimed once** with their old
-PIN from the race page. Race management goes through admin accounts only —
-the per-race admin keys of early versions are no longer issued or accepted.
+Race management goes through admin accounts only.
 
 ## Auto-creating a race from the Notice of Race / SIs
 

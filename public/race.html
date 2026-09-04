@@ -14,7 +14,7 @@
 <header class="site">
   <div class="logo"><a href="/" style="color:inherit"><svg viewBox="0 0 56 44" aria-hidden="true"><line x1="5" y1="2" x2="5" y2="42" stroke="currentColor" stroke-width="3"></line><path d="M8 4 L52 22 L8 40 Z" fill="#c8102e"></path><path d="M12 27 C 18 18, 24 18, 29 23 C 33 27, 37 26, 41 21" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path></svg><span>Virtual Navigator</span></a></div>
   <div class="sub" id="r_name">loading…</div>
-  <div class="right"><span id="r_clock" class="clock"></span></div>
+  <div class="right"><span id="r_clock" class="clock" aria-hidden="true"></span></div>
 </header>
 
 <div id="wx_warn" style="display:none;background:#c8102e;color:#fff;padding:8px 16px;
@@ -30,26 +30,27 @@
       <div class="lb-filters" id="lb_filters"></div>
       <div class="lb-scroll table-scroll">
         <table class="list" id="lb">
-          <thead><tr><th>#</th><th>Boat</th><th></th><th>DTF&nbsp;nm</th><th>kn</th></tr></thead>
+          <thead><tr><th>#</th><th>Boat</th><th>Status</th><th>To finish (nm)</th><th>Speed (kn)</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
       <div class="small" style="margin-top:10px">
-        <a id="dl_course" href="#" title="the course marks as a GPX route. Import it into your routing software and route between them">⬇ course route (.gpx)</a> ·
-        <a id="dl_polar" href="#">⬇ race polar (.pol)</a>
+        <a id="dl_course" href="#">Download course (GPX)</a> ·
+        <a id="dl_polar" href="#">Download polar (.pol)</a>
+        <div class="muted">Import the course into your routing software and route between the marks.</div>
       </div>
     </div>
 
     <div class="card" id="cmp_card" style="display:none">
-      <h2>Real vs virtual: boat speed or navigation?</h2>
+      <h2>Why the gap?</h2>
       <p class="small muted" style="margin:2px 0 8px">
-        The gap to a tracked boat splits in two.
-        <b style="color:var(--text)">Boat speed</b>: its own track re-sailed
-        at race-polar speed through the same wind, which shows how much faster
-        or slower than the polar it really goes.
-        <b style="color:var(--text)">Navigation</b>: what remains once boat
-        speed is removed, so where each boat went and when. Click a
-        leaderboard row to pick a boat.</p>
+        The time between a real boat and a virtual boat is split two ways.
+        <b style="color:var(--text)">Boat speed</b>: the real boat's own track
+        re-sailed at polar speed through the same wind, so how far above or
+        below the polar it actually sails.
+        <b style="color:var(--text)">Navigation</b>: everything else, meaning
+        where each boat went, and when. Click a leaderboard row to pick a
+        boat.</p>
       <div class="row">
         <div><label for="cmp_real">Real boat</label><select id="cmp_real"></select></div>
         <div><label for="cmp_virtual">Virtual boat</label><select id="cmp_virtual"></select></div>
@@ -102,7 +103,7 @@
           <div class="row actions"><button type="submit" id="mb_reg_go">Enter this race</button></div>
         </form>
         <div class="msg" id="mb_msg1" aria-live="polite"></div>
-        <p class="small"><a href="#" id="mb_claim_toggle">Claim a pre-account boat (old PIN)</a></p>
+        <p class="small" id="mb_claim_p" style="display:none"><a href="#" id="mb_claim_toggle">Claim a pre-account boat (old PIN)</a></p>
         <form id="mb_claim" style="display:none" class="row" novalidate>
           <div><label for="mb_claim_id">Boat ID</label><input id="mb_claim_id" inputmode="numeric"></div>
           <div><label for="mb_claim_pin">PIN</label><input id="mb_claim_pin" type="password" autocomplete="off"></div>
@@ -116,21 +117,21 @@
           <code id="mb_pos"></code>
           <span class="muted" id="mb_fix_meta"></span>
           <div class="row fix-actions" style="margin-top:6px">
-            <button class="ghost" id="mb_center">📍 Center chart</button>
+            <button class="ghost" id="mb_center">Center on my boat</button>
             <button class="ghost" id="mb_copy_lat">Copy lat</button>
             <button class="ghost" id="mb_copy_lon">Copy lon</button>
           </div>
         </div>
         <div class="msg" id="mb_msg2"></div>
 
-        <h3>Submit / update routing</h3>
+        <h3>Submit a route</h3>
         <p class="small muted" style="margin:2px 0 8px">
           Replaces only the part of your route you haven't sailed yet. Your boat
           keeps sailing the old plan until you submit. Future waypoints are
           private to you.</p>
         <div class="row">
-          <button id="mb_draw">✏️ Draw on map</button>
-          <button class="ghost" id="mb_file_btn">Upload GPX / CSV</button>
+          <button id="mb_draw">Draw on chart</button>
+          <button class="ghost" id="mb_file_btn">Upload route (GPX or CSV)</button>
           <input type="file" id="mb_file" accept=".gpx,.csv,.txt,.xml" style="display:none">
         </div>
         <div id="mb_draw_ui" style="display:none;margin-top:8px" class="small">
@@ -139,16 +140,18 @@
           <div class="row" style="margin-top:6px">
             <button class="ghost" id="mb_undo">Undo</button>
             <button class="ghost" id="mb_clear">Clear</button>
-            <button id="mb_submit">Submit routing</button>
+            <button id="mb_submit">Submit route</button>
           </div>
         </div>
-        <h3>Tools</h3>
+        <h3>Downloads</h3>
         <div class="small">
-          <a id="mb_course" href="#">⬇ course route (.gpx)</a> ·
-          <a id="mb_polar" href="#">⬇ race polar (.pol)</a> ·
-          <a id="mb_gpx" href="#">⬇ my track (.gpx)</a> ·
-          <a id="mb_posgpx" href="#" title="one-waypoint GPX: import as the departure point for your next routing run">⬇ position (.gpx)</a> ·
-          <a id="mb_profile" href="#">my profile</a>
+          <a id="mb_course" href="#">Course (GPX)</a> ·
+          <a id="mb_polar" href="#">Polar (.pol)</a> ·
+          <a id="mb_gpx" href="#">My track (GPX)</a> ·
+          <a id="mb_posgpx" href="#">My position (GPX)</a>
+          <div class="muted">The position file is one waypoint: import it as the departure
+          point for your next routing run.</div>
+          <div style="margin-top:4px"><a id="mb_profile" href="#">My profile</a></div>
         </div>
         <div class="small muted" id="mb_subs" style="margin-top:6px"></div>
       </div>
@@ -163,17 +166,18 @@
     </div>
 
     <div class="card">
-      <h2>On-board forecasts</h2>
+      <h2>Forecasts (GRIB)</h2>
       <p class="small muted" style="margin:2px 0 8px">
         The wind the fleet is sailing in, saved every 6 hours from the same
-        model that drives the boats. Load a file into your routing software
-        (GRIB-1, 10 m wind). Older files show what was known at the time.</p>
-      <div id="fx_list" class="small muted">no snapshots yet</div>
+        model that drives the boats (Open-Meteo, 10 m wind, GRIB-1). Load a
+        file into your routing software. Older files show what was known at
+        the time.</p>
+      <div id="fx_list" class="small muted">No forecasts yet; the first is saved within a minute.</div>
     </div>
 
-    <div class="card small muted">
+    <div class="card small muted" id="rules_card" style="display:none">
       <b style="color:var(--text)">House rules.</b> One polar for the whole fleet,
-      scaled to <span id="r_perf"></span> of polar targets. Your boat sails your
+      scaled to <span id="r_perf"></span> of the polar. Your boat sails your
       waypoints through real surface wind <span id="r_cur"></span>, advancing
       <span id="r_step"></span>. What's sailed is locked. Every tack or gybe
       costs <span id="r_pen"></span>, and water under <span id="r_depth"></span>
@@ -265,13 +269,14 @@ async function api(path, opts) {
 async function loadRace() {
   race = await api('/api/races/' + raceId);
   document.getElementById('r_name').textContent = race.name;
-  document.title = race.name + ' — Virtual Navigator';
+  document.title = race.name + ' · Virtual Navigator';
+  document.getElementById('rules_card').style.display = 'block';
   document.getElementById('r_perf').textContent = Math.round(race.perf_factor * 100) + '%';
   document.getElementById('r_step').textContent = 'every ' + race.step_minutes + ' min';
   document.getElementById('r_cur').textContent =
     race.currents_enabled ? 'and ocean current' : '(currents off)';
   document.getElementById('r_pen').textContent =
-    Math.round(race.maneuver_penalty_s) + ' s';
+    Math.round(race.maneuver_penalty_s) + ' seconds';
   document.getElementById('r_depth').textContent =
     Math.round(race.grounding_depth_ft ?? 15) + ' ft';
   document.getElementById('dl_course').href = `/api/races/${raceId}/course.gpx`;
@@ -299,7 +304,7 @@ function drawCourse() {
     L.circleMarker([m.lat, m.lon], {
       radius: 6, color: col.mark, weight: 2, fillColor: col.mark, fillOpacity: .35,
     }).addTo(courseLayer).bindTooltip(
-      `${i === 0 ? '⚑ ' : i === race.marks.length - 1 ? '🏁 ' : ''}${esc(m.name)}${m.side === 'stbd' ? ' — leave to starboard' : m.side === 'port' ? ' — leave to port' : ''}`,
+      `${i === 0 ? 'Start: ' : i === race.marks.length - 1 ? 'Finish: ' : ''}${esc(m.name)}${m.side === 'stbd' ? ' · leave to starboard' : m.side === 'port' ? ' · leave to port' : ''}`,
       { className: 'boat-label', permanent: false });
   });
   // exclusion zones — keep out or sail at half speed
@@ -308,7 +313,7 @@ function drawCourse() {
       color: col.zone, weight: 1.5, dashArray: '4 4', opacity: .8,
       fillColor: col.zone, fillOpacity: .08,
     }).addTo(courseLayer).bindTooltip(
-      `⛔ ${esc(z.name)} — half speed inside`,
+      `${esc(z.name)}: half speed inside`,
       { className: 'boat-label', sticky: true });
   });
 }
@@ -371,7 +376,7 @@ legend.onAdd = () => {
   d.innerHTML =
     '<span style="display:inline-block;width:9px;height:9px;background:#e8590c;' +
       'transform:rotate(45deg);border:1.5px solid #fff;box-shadow:0 0 0 1px #101418"></span>' +
-    ' actual (tracker) &nbsp; ' +
+    ' real (tracker) &nbsp; ' +
     '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;' +
       'background:#1864ab;border:1.5px solid #101418"></span> virtual';
   return d;
@@ -382,10 +387,9 @@ async function refresh() {
   state = await api(`/api/races/${raceId}/state`);
   const warn = document.getElementById('wx_warn');
   if (state.weather && state.weather.degraded) {
-    warn.textContent = `⚠ Weather source degraded: ${state.weather.synthetic_cells} ` +
-      'wind cell(s) are placeholder data while the forecast API is unreachable. ' +
-      'Routing uploads are paused until real wind returns (retried every 15 min). ' +
-      'See the committee log.';
+    warn.textContent = 'Weather feed down. Some wind cells are placeholder data until the ' +
+      'forecast source is reachable again (retried every 15 min). Route submissions are ' +
+      'paused meanwhile; see the committee log.';
     warn.style.display = 'block';
   } else {
     warn.style.display = 'none';
@@ -417,7 +421,7 @@ function drawFleet() {
             iconSize: [12, 12], iconAnchor: [6, 6] }) })
         : L.circleMarker([e.lat, e.lon], { radius: 5.5, color: '#101418', weight: 1.5, fillColor: c, fillOpacity: 1 });
       mk.addTo(fleetLayer).bindTooltip(
-        `${esc(e.name)} · ${e.type === 'real' ? 'actual' : 'virtual'} · ${fmt1(e.sog)} kn · ${Math.round(e.dtf)} nm to go`,
+        `${esc(e.name)} · ${e.type} · ${fmt1(e.sog)} kn · ${Math.round(e.dtf)} nm to go`,
         { className: 'boat-label', direction: 'top', offset: [0, -8] });
     }
   });
@@ -437,7 +441,7 @@ async function loadDocs() {
     const label = { nor: 'Notice of Race', si: 'Sailing Instructions',
                     amendment: 'Amendment', doc: 'Document' };
     document.getElementById('docs_list').innerHTML = docs.map(d =>
-      `<div>📄 <a href="/api/docs/${d.id}">${esc(d.filename)}</a>` +
+      `<div><a href="/api/docs/${d.id}">${esc(d.filename)}</a>` +
       ` <span class="muted">· ${label[d.kind] || d.kind} · ${Math.round(d.size / 1024)} kB</span></div>`
     ).join('');
   } catch (e) { /* card stays hidden */ }
@@ -449,8 +453,7 @@ async function loadLog() {
     if (!log.length) return;
     document.getElementById('log_card').style.display = 'block';
     document.getElementById('log_list').innerHTML = log.map(l => {
-      const d = new Date(l.at * 1000).toISOString().slice(5, 16).replace('T', ' ');
-      return `<div style="margin-bottom:6px"><span class="muted">${d}z</span> — ${esc(l.message)}</div>`;
+      return `<div style="margin-bottom:6px"><span class="muted">${vnTime(l.at)}</span> · ${esc(l.message)}</div>`;
     }).join('');
   } catch (e) { /* card stays hidden */ }
 }
@@ -459,12 +462,11 @@ async function loadForecasts() {
   try {
     const fx = await api(`/api/races/${raceId}/forecasts`);
     const div = document.getElementById('fx_list');
-    if (!fx.length) { div.textContent = 'no snapshots yet — the first arrives within a minute'; return; }
+    if (!fx.length) { div.textContent = 'No forecasts yet; the first is saved within a minute.'; return; }
     div.classList.remove('muted');
     div.innerHTML = fx.slice(0, 8).map(f => {
-      const d = new Date(f.issued_at * 1000).toISOString().slice(5, 16).replace('T', ' ');
-      return `<div>⬇ <a href="/api/forecasts/${f.id}.grb">${d}z</a>` +
-        ` <span class="muted">· +${(f.hours - 1) * 3}h · ${f.step}° grid · ${Math.round(f.bytes / 1024)} kB</span></div>`;
+      return `<div><a href="/api/forecasts/${f.id}.grb">${vnTime(f.issued_at)}</a>` +
+        ` <span class="muted">· 0–${(f.hours - 1) * 3} h · ${f.step}° resolution · ${Math.round(f.bytes / 1024)} kB</span></div>`;
     }).join('');
   } catch (e) { /* leave placeholder */ }
 }
@@ -472,12 +474,12 @@ async function loadForecasts() {
 function drawLeaderboard() {
   const counts = {};
   state.entries.forEach(e => {
-    if (e.type === 'real' && e.klass) counts[e.klass] = (counts[e.klass] || 0) + 1;
+    if (e.type === 'real' && e.klass && e.klass !== 'real') counts[e.klass] = (counts[e.klass] || 0) + 1;
   });
   const classes = Object.keys(counts)
     .sort((a, b) => counts[b] - counts[a]).slice(0, 6);
   const fdiv = document.getElementById('lb_filters');
-  const opts = [['all', 'All'], ['virtual', 'Virtual fleet'], ['real', 'Real fleet'],
+  const opts = [['all', 'All'], ['virtual', 'Virtual'], ['real', 'Real'],
     ...classes.map(c => [c, 'Class: ' + c])];
   fdiv.innerHTML = '';
   for (const [val, lab] of opts) {
@@ -497,7 +499,7 @@ function drawLeaderboard() {
     const mine = my && e.type === 'virtual' && e.id === my.boatId;
     const badge = e.finished_at
       ? '<span class="badge fin">finished</span>'
-      : !e.started ? '<span class="badge">—</span>'
+      : !e.started ? '<span class="badge">not started</span>'
       : e.type === 'real' ? `<span class="badge real">${esc(e.klass)}</span>`
       : '<span class="badge virtual">virtual</span>';
     const nm = e.owner
@@ -508,7 +510,7 @@ function drawLeaderboard() {
       <td>${badge}</td><td>${e.finished_at ? '0' : Math.round(e.dtf)}</td><td>${fmt1(e.sog)}</td>`;
     if (e.started) {
       tr.style.cursor = 'pointer';
-      tr.title = 'compare this boat — real vs virtual';
+      tr.title = 'Compare with this boat';
       tr.onclick = (ev) => {
         if (ev.target.closest('a')) return;
         if (e.type === 'real') cmpSel.real = e.id; else cmpSel.virtual = e.id;
@@ -540,7 +542,7 @@ function fillCompare() {
     `${e.type === 'real' && e.klass ? ' · ' + esc(e.klass) : ''}</option>`;
   const rs = document.getElementById('cmp_real'), vs = document.getElementById('cmp_virtual');
   rs.innerHTML = reals.map(opt).join('');
-  vs.innerHTML = '<option value="">race polar only</option>' + virts.map(opt).join('');
+  vs.innerHTML = '<option value="">No virtual boat (polar report only)</option>' + virts.map(opt).join('');
   rs.value = String(cmpSel.real);
   vs.value = String(cmpSel.virtual);
   runCompare();
@@ -555,7 +557,7 @@ async function runCompare() {
   const out = document.getElementById('cmp_out');
   const q = `real=${cmpSel.real}` + (cmpSel.virtual ? `&virtual=${cmpSel.virtual}` : '');
   const seq = ++cmpSeq;
-  if (q !== cmpLastQ) out.innerHTML = '<span class="muted">re-sailing the tracks…</span>';
+  if (q !== cmpLastQ) out.innerHTML = '<span class="muted">Re-sailing the tracks…</span>';
   cmpLastQ = q;
   try {
     const c = await api(`/api/races/${raceId}/compare?${q}`);
@@ -583,7 +585,7 @@ function renderCompare(c) {
   let h = '';
   if (v) {
     const level = Math.abs(c.gap_h) < 1 / 120;
-    h += `<p class="cmp-head"><b>${esc(r.name)}</b> reached <b>${esc(c.reference)}</b> ` +
+    h += `<p class="cmp-head">At <b>${esc(c.reference)}</b>, <b>${esc(r.name)}</b> was ` +
       (level ? 'level with' : `${fmtDur(c.gap_h)} ${c.gap_h > 0 ? 'ahead of' : 'behind'}`) +
       ` <b>${esc(v.name)}</b>.</p>`;
     if (c.components) {
@@ -693,17 +695,17 @@ async function refreshMine() {
   refreshFix().catch(() => {});
   const b = await api(`/api/boats/${my.boatId}`);
   const st = document.getElementById('mb_status');
-  const when = t => new Date(t * 1000).toISOString().slice(5, 16).replace('T', ' ');
+  const mins = steps => `${steps * (race ? race.step_minutes : 10)} min`;
   if (b.finished_at) {
-    st.innerHTML = `<b>${esc(b.name)}</b> — 🏁 finished at ${when(b.finished_at)} UTC`;
+    st.innerHTML = `<b>${esc(b.name)}</b> · finished ${vnTime(b.finished_at)}`;
   } else if (b.sim_time == null) {
-    st.innerHTML = `<b>${esc(b.name)}</b> — no routing yet. Submit one to start sailing.`;
+    st.innerHTML = `<b>${esc(b.name)}</b> · No route yet. Submit one and the boat starts sailing.`;
   } else {
-    st.innerHTML = `<b>${esc(b.name)}</b> — ${b.dtf == null ? '' : Math.round(b.dtf) + ' nm to go · '}` +
+    st.innerHTML = `<b>${esc(b.name)}</b> · ${b.dtf == null ? '' : Math.round(b.dtf) + ' nm to go · '}` +
       `${b.maneuvers} tacks/gybes` +
-      (b.groundings ? ` · <span style="color:var(--bad)">⚠ ${b.groundings} step(s) aground</span>` : '') +
-      (b.zone_steps ? ` · <span style="color:var(--bad)">⛔ ${b.zone_steps} step(s) in exclusion zones</span>` : '') +
-      ` · sailed through ${when(b.sim_time)} UTC (locked)`;
+      (b.groundings ? ` · <span style="color:var(--bad)">${mins(b.groundings)} aground</span>` : '') +
+      (b.zone_steps ? ` · <span style="color:var(--bad)">${mins(b.zone_steps)} in exclusion zones</span>` : '') +
+      ` · sailed to ${vnTime(b.sim_time)} (locked)`;
   }
   planLayer.clearLayers();
   const planCol = COLORS.plan;
@@ -716,7 +718,7 @@ async function refreshMine() {
     L.polyline(b.route, { color: planCol, weight: 2, dashArray: '3 6', opacity: .9 }).addTo(planLayer);
   }
   document.getElementById('mb_subs').textContent = b.submissions.length
-    ? 'Routing submissions: ' + b.submissions.map(s => `${when(s.at)} (${s.n} wps)`).slice(0, 5).join(' · ')
+    ? 'Routes submitted: ' + b.submissions.map(s => `${vnTime(s.at)} (${s.n} waypoints)`).slice(0, 5).join(' · ')
     : '';
 }
 
@@ -770,6 +772,8 @@ document.getElementById('mb_form_enter').onsubmit = async (ev) => {
     await showManage(); refreshMine();
   } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
 };
+if (new URLSearchParams(location.search).has('claim'))
+  document.getElementById('mb_claim_p').style.display = '';
 document.getElementById('mb_claim_toggle').onclick = (ev) => {
   ev.preventDefault();
   document.getElementById('mb_claim').style.display = 'flex';
@@ -794,7 +798,7 @@ function setMsg2(text, ok) { msg2.className = 'msg ' + (ok ? 'ok' : 'err'); msg2
 document.getElementById('mb_draw').onclick = () => {
   drawMode = !drawMode;
   document.getElementById('mb_draw_ui').style.display = drawMode ? 'block' : 'none';
-  document.getElementById('mb_draw').textContent = drawMode ? '✏️ Drawing… (click chart)' : '✏️ Draw on map';
+  document.getElementById('mb_draw').textContent = drawMode ? 'Drawing: click the chart' : 'Draw on chart';
   if (!drawMode) { drawWps = []; drawLayer.clearLayers(); updateDrawUi(); }
 };
 map.on('click', (ev) => {
@@ -814,7 +818,7 @@ function updateDrawUi() {
 document.getElementById('mb_undo').onclick = () => { drawWps.pop(); updateDrawUi(); };
 document.getElementById('mb_clear').onclick = () => { drawWps = []; updateDrawUi(); };
 document.getElementById('mb_submit').onclick = async () => {
-  if (!drawWps.length) return setMsg2('add at least one waypoint', false);
+  if (!drawWps.length) return setMsg2('Add at least one waypoint.', false);
   await submitRoute({ waypoints: drawWps });
 };
 document.getElementById('mb_file_btn').onclick = () => document.getElementById('mb_file').click();
@@ -830,9 +834,9 @@ async function submitRoute(payload) {
     const j = await api(`/api/boats/${my.boatId}/route`, { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload) });
-    let text = `Routing accepted — ${j.waypoints} waypoints ahead of you.`;
+    let text = `Route accepted: ${j.waypoints} waypoints ahead of you.`;
     if (j.adjustments && j.adjustments.length)
-      text += ' Course adjustments: ' + j.adjustments.join('; ') + '.';
+      text += ' Adjusted for the course: ' + j.adjustments.join('; ') + '.';
     setMsg2(text, true);
     drawWps = []; drawLayer.clearLayers(); updateDrawUi();
     if (drawMode) document.getElementById('mb_draw').click();
@@ -845,9 +849,12 @@ setInterval(() => {
   if (!race) return;
   const now = Date.now() / 1000, d = now - race.start_time;
   const el = document.getElementById('r_clock');
-  const a = Math.abs(d), h = Math.floor(a / 3600), m = Math.floor((a % 3600) / 60), s = Math.floor(a % 60);
+  const a = Math.abs(d), days = Math.floor(a / 86400), h = Math.floor((a % 86400) / 3600),
+    m = Math.floor((a % 3600) / 60);
   const pad = n => String(n).padStart(2, '0');
-  el.textContent = (d < 0 ? 'starts in ' : 'elapsed ') + `${h}:${pad(m)}:${pad(s)}`;
+  el.textContent = d < 0
+    ? `starts in ${days ? days + ' d ' : ''}${h} h ${pad(m)} min`
+    : `elapsed ${days ? days + ' d ' : ''}${pad(h)}:${pad(m)}`;
 }, 1000);
 
 (async function init() {
@@ -855,7 +862,14 @@ setInterval(() => {
   await showManage();
   await refresh();
   setInterval(refresh, 60000);
-})().catch(e => { document.getElementById('r_name').textContent = 'error: ' + e.message; });
+})().catch(e => {
+  document.getElementById('r_name').textContent = 'Race not found';
+  document.title = 'Race not found · Virtual Navigator';
+  const why = e.message === 'race not found' ? `There is no race with id ${raceId}.` : esc(e.message);
+  document.querySelector('.race-grid').innerHTML =
+    `<div class="card" style="margin:32px auto;max-width:520px;grid-column:1/-1;align-self:start">` +
+    `<h2>Race</h2><p>${why} <a href="/">Back to the race board</a>.</p></div>`;
+});
 </script>
 </body>
 </html>
