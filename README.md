@@ -276,6 +276,11 @@ is fixed on its own branch.
 
 ## Design notes & simplifications
 
+- Leaflet 1.9.4 is vendored under `public/vendor/leaflet/` (BSD-2-Clause)
+  so the pages do not depend on a CDN. Base map tiles come from the public
+  OpenStreetMap server, whose usage policy tolerates small sites only; budget
+  for a tile provider before a large fleet.
+
 - A background ticker advances every race in its active window (start − 72 h
   to start + 60 d) once a minute, at most 24 h of steps per tick, so a gap
   after a restart is sailed over a few ticks while requests keep being served

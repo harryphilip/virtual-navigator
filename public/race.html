@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Race — Virtual Navigator</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -223,7 +223,7 @@
   </div>
 </main>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/vendor/leaflet/leaflet.js"></script>
 <script src="/js/auth.js"></script>
 <script>
 const raceId = +new URLSearchParams(location.search).get('id');
@@ -251,18 +251,30 @@ const EncLayer = L.TileLayer.extend({
 const chartLayer = new EncLayer('', { maxZoom: 15,
   attribution: 'NOAA ENC · not for navigation' });
 const osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors', maxZoom: 12 });
+  attribution: '&copy; OpenStreetMap contributors', maxZoom: 18 });
 const seamarks = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
   maxZoom: 18, attribution: 'OpenSeaMap' });
 
-let chartMode = true;
-chartLayer.addTo(map);
-document.getElementById('map').classList.add('chart-mode');
-L.control.layers({ 'NOAA chart': chartLayer, 'OpenStreetMap': osmLayer },
+/* OpenStreetMap is the default everywhere: it paints in a second. The NOAA
+   ENC chart (US waters only) renders one tile per request from an ArcGIS
+   export endpoint and can take fifteen seconds to fill, so it is opt-in
+   from the layers control, with a loading note while it draws. */
+let chartMode = false;
+osmLayer.addTo(map);
+L.control.layers({ 'OpenStreetMap': osmLayer, 'NOAA chart (US waters, slow)': chartLayer },
                  { 'Seamarks (OpenSeaMap)': seamarks }).addTo(map);
+const loadingNote = L.control({ position: 'topright' });
+loadingNote.onAdd = () => {
+  const d = L.DomUtil.create('div', 'map-legend');
+  d.textContent = 'Loading chart…';
+  return d;
+};
+chartLayer.on('loading', () => { if (!loadingNote._map) loadingNote.addTo(map); });
+chartLayer.on('load', () => { if (loadingNote._map) loadingNote.remove(); });
 map.on('baselayerchange', (e) => {
-  chartMode = e.name === 'NOAA chart';
+  chartMode = e.layer === chartLayer;
   document.getElementById('map').classList.toggle('chart-mode', chartMode);
+  if (!chartMode && loadingNote._map) loadingNote.remove();
 });
 function setBase(chart) {
   if (chart === chartMode) return;
@@ -318,9 +330,6 @@ async function loadRace() {
   loadLog();
   const pts = race.marks.map(m => [m.lat, m.lon]);
   courseBounds = L.latLngBounds(pts).pad(0.25);
-  // ENC coverage is US waters — start foreign courses on the OSM base
-  const ctr = courseBounds.getCenter();
-  setBase(ctr.lng > -130 && ctr.lng < -60 && ctr.lat > 15 && ctr.lat < 50);
   drawCourse();
   fitHome();
   initMini();

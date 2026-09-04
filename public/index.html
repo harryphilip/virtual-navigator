@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Virtual Navigator</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -223,7 +223,7 @@
   </footer>
 </main>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/vendor/leaflet/leaflet.js"></script>
 <script src="/js/auth.js"></script>
 <script>
 function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
@@ -301,7 +301,7 @@ function ensureMap() {
   homeMap = L.map('home_map', { worldCopyJump: true, scrollWheelZoom: false })
     .setView([40, -40], 3);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors', maxZoom: 12,
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 18,
   }).addTo(homeMap);
   courseLayer = L.layerGroup().addTo(homeMap);
   new ResizeObserver(() => homeMap.invalidateSize()).observe(el);
