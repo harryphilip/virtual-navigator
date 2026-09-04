@@ -8,6 +8,7 @@ import json
 import os
 import re
 import secrets
+import sqlite3
 import logging
 import threading
 import time
@@ -16,7 +17,7 @@ from flask import Flask, jsonify, request, send_from_directory, Response
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from vn import ais, yb
+from vn import ais, mail, yb
 from vn.compare import CompareError, compare
 from vn.db import add_race_log, get_db
 from vn.forecast import make_snapshot
@@ -80,6 +81,20 @@ def _user_json(u):
             "is_admin": bool(u["is_admin"])}
 
 
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+RESET_TTL = 3600
+
+
+def _clean_email(raw):
+    """Lower-cased, validated address, None for blank, ValueError for junk."""
+    e = (raw or "").strip().lower()
+    if not e:
+        return None
+    if len(e) > 120 or not EMAIL_RE.match(e):
+        raise ValueError("That does not look like an email address.")
+    return e
+
+
 def _err(msg, code=400):
     return jsonify({"error": msg}), code
 
@@ -95,6 +110,8 @@ RATE_LIMITS = {                 # kind: (attempts, seconds)
     "claim": (5, 60),
     "route": (10, 3600),        # per boat
     "docs": (5, 3600),
+    "forgot": (3, 3600),
+    "reset": (10, 3600),
 }
 _buckets = {}
 _bucket_lock = threading.Lock()
@@ -231,6 +248,11 @@ def how_page():
     return send_from_directory("public", "how.html")
 
 
+@app.get("/reset")
+def reset_page():
+    return send_from_directory("public", "reset.html")
+
+
 # ---------- accounts ---------------------------------------------------------
 
 @app.post("/api/auth/register")
@@ -246,15 +268,21 @@ def auth_register():
     password = d.get("password") or ""
     if len(password) < 6:
         return _err("Password must be at least 6 characters.")
+    try:
+        email = _clean_email(d.get("email"))
+    except ValueError as e:
+        return _err(str(e))
+    if email and db.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
+        return _err("That email is already on an account. Sign in, or use Forgot password.", 409)
     salt = secrets.token_hex(16)
     first = db.execute("SELECT COUNT(*) c FROM users").fetchone()["c"] == 0
     try:
         cur = db.execute(
-            "INSERT INTO users(username,display_name,salt,pass_hash,is_admin,created_at) "
-            "VALUES (?,?,?,?,?,?)",
+            "INSERT INTO users(username,display_name,salt,pass_hash,is_admin,created_at,email) "
+            "VALUES (?,?,?,?,?,?,?)",
             (username, (d.get("display_name") or "").strip()[:60], salt,
-             _hash_pw(password, salt), 1 if first else 0, int(time.time())))
-    except Exception:
+             _hash_pw(password, salt), 1 if first else 0, int(time.time()), email))
+    except sqlite3.IntegrityError:
         return _err("That username is taken. Pick another, or sign in if it is yours.", 409)
     db.commit()
     u = db.execute("SELECT * FROM users WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -292,7 +320,98 @@ def auth_logout():
 @app.get("/api/auth/me")
 def auth_me():
     u = current_user(get_db())
-    return jsonify({"user": _user_json(u) if u else None})
+    out = _user_json(u) if u else None
+    if out:
+        out["email"] = u["email"]           # only ever shown to the account itself
+    return jsonify({"user": out, "reset_available": mail.configured()})
+
+
+@app.post("/api/auth/email")
+def auth_set_email():
+    """Set or clear the address a reset link goes to. Blank clears it."""
+    db = get_db()
+    u = current_user(db)
+    if not u:
+        return _err("Sign in to do that.", 401)
+    d = request.get_json(force=True)
+    try:
+        email = _clean_email(d.get("email"))
+    except ValueError as e:
+        return _err(str(e))
+    if email and db.execute("SELECT 1 FROM users WHERE email=? AND id<>?",
+                            (email, u["id"])).fetchone():
+        return _err("That email is already on another account.", 409)
+    db.execute("UPDATE users SET email=? WHERE id=?", (email, u["id"]))
+    db.commit()
+    return jsonify({"ok": True, "email": email})
+
+
+@app.post("/api/auth/forgot")
+def auth_forgot():
+    """Email a one-hour, single-use reset link. The answer is the same
+    whether or not the account exists or has an address, so nothing here
+    tells a stranger which usernames are real."""
+    wait = _rate_limited("forgot")
+    if wait:
+        return _too_many(wait)
+    if not mail.configured():
+        return _err("Password reset by email is not set up on this server. "
+                    "Ask the committee to reset your password.", 503)
+    db = get_db()
+    d = request.get_json(force=True)
+    who = (d.get("account") or "").strip().lower()
+    u = None
+    if who:
+        u = db.execute("SELECT * FROM users WHERE username=? OR email=?", (who, who)).fetchone()
+    if u and u["email"]:
+        token = secrets.token_urlsafe(32)
+        now = int(time.time())
+        db.execute("INSERT INTO password_resets(token_hash,user_id,created_at,expires_at) "
+                   "VALUES (?,?,?,?)",
+                   (hashlib.sha256(token.encode()).hexdigest(), u["id"], now, now + RESET_TTL))
+        db.execute("DELETE FROM password_resets WHERE expires_at < ?", (now - 86400,))
+        db.commit()
+        link = f"{request.host_url.rstrip('/')}/reset?token={token}"
+        try:
+            mail.send(u["email"], "Virtual Navigator: reset your password",
+                      f"Someone asked to reset the password for the navigator account "
+                      f"'{u['username']}' on Virtual Navigator.\n\n"
+                      f"If that was you, open this link within the hour:\n\n  {link}\n\n"
+                      "If it was not you, ignore this message; the password stays as it is.\n")
+        except Exception:
+            log.exception("reset mail to user %s failed", u["id"])
+            return _err("The reset email could not be sent. Try again in a few minutes, "
+                        "or ask the committee.", 502)
+    return jsonify({"ok": True, "message": "If that account has an email on file, a reset "
+                                           "link is on its way. It works for one hour."})
+
+
+@app.post("/api/auth/reset")
+def auth_reset():
+    wait = _rate_limited("reset")
+    if wait:
+        return _too_many(wait)
+    db = get_db()
+    d = request.get_json(force=True)
+    password = d.get("password") or ""
+    if len(password) < 6:
+        return _err("Password must be at least 6 characters.")
+    token = (d.get("token") or "").strip()
+    now = int(time.time())
+    row = db.execute("SELECT * FROM password_resets WHERE token_hash=?",
+                     (hashlib.sha256(token.encode()).hexdigest(),)).fetchone() if token else None
+    if not row or row["used_at"] or row["expires_at"] < now:
+        return _err("That reset link is not valid any more: it has expired or was already used. "
+                    "Ask for a new one from the home page.")
+    salt = secrets.token_hex(16)
+    db.execute("UPDATE users SET salt=?, pass_hash=? WHERE id=?",
+               (salt, _hash_pw(password, salt), row["user_id"]))
+    db.execute("UPDATE password_resets SET used_at=? WHERE token_hash=?", (now, row["token_hash"]))
+    db.execute("DELETE FROM sessions WHERE user_id=?", (row["user_id"],))   # every device
+    db.commit()
+    u = db.execute("SELECT * FROM users WHERE id=?", (row["user_id"],)).fetchone()
+    resp = jsonify({"ok": True, "user": _user_json(u)})
+    return _start_session(resp, db, u["id"])
 
 
 @app.get("/api/users/<username>")

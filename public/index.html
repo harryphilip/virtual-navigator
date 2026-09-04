@@ -89,8 +89,20 @@
         <div class="row actions">
           <button type="submit">Sign in</button>
           <button type="button" class="ghost" id="a_show_reg">Create an account</button>
+          <a href="#" class="small" id="a_show_forgot">Forgot password?</a>
         </div>
         <div class="msg" id="a_msg" aria-live="polite"></div>
+      </form>
+      <form id="f_forgot" novalidate hidden>
+        <label for="fg_account">Username or email</label>
+        <input id="fg_account" name="account" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+        <div class="row actions">
+          <button type="submit">Email me a reset link</button>
+          <button type="button" class="ghost" id="a_forgot_back">Back to sign in</button>
+        </div>
+        <div class="msg" id="fg_msg" aria-live="polite"></div>
+        <p class="small muted" style="margin:6px 0 0">The link works once, for one hour, and only if the
+        account has an email on file. Add one on your profile page.</p>
       </form>
       <form id="f_reg" autocomplete="on" novalidate hidden>
         <div class="row">
@@ -102,14 +114,16 @@
           <div><label for="r_pass">Password</label>
             <input id="r_pass" name="password" type="password" autocomplete="new-password" required minlength="6"></div>
         </div>
+        <label for="r_email">Email (optional, only for password resets)</label>
+        <input id="r_email" name="email" type="email" autocomplete="email" maxlength="120">
         <div class="row actions">
           <button type="submit">Create account</button>
           <button type="button" class="ghost" id="a_show_login">I have an account</button>
         </div>
         <div class="msg" id="r_msg" aria-live="polite"></div>
         <p class="small muted" style="margin:6px 0 0">3 to 30 characters for the username; letters,
-        digits, dash or underscore. Passwords are at least 6 characters and cannot be reset: no
-        email is kept, so write it down.</p>
+        digits, dash or underscore. Passwords are at least 6 characters. Without an email on file
+        there is no way to reset a forgotten password, so write it down.</p>
       </form>
     </div>
     <div id="acct_in" style="display:none" class="small"></div>
@@ -216,7 +230,8 @@
     Polars: meltemus.com. Real-boat positions: YB Tracking and aisstream.io, shown
     for comparison only. Not affiliated with any race organiser.</p>
     <p><b>Your data.</b> An account is a username, a display name and a password
-    hash. No email is kept, so there is no password reset. Sailed tracks and
+    hash, plus an email address if you choose to add one, used only to send a
+    password-reset link. Sailed tracks and
     submission times are public; future waypoints are not. The session cookie
     lasts 90 days. Pages load fonts from Google and map tiles from OpenStreetMap
     and NOAA, which see your IP address.</p>
@@ -249,8 +264,25 @@ async function initAccount() {
 function showAuth(which) {
   document.getElementById('f_login').hidden = which !== 'login';
   document.getElementById('f_reg').hidden = which !== 'reg';
-  document.getElementById(which === 'login' ? 'a_user' : 'r_user').focus();
+  document.getElementById('f_forgot').hidden = which !== 'forgot';
+  document.getElementById({ login: 'a_user', reg: 'r_user', forgot: 'fg_account' }[which]).focus();
 }
+document.getElementById('a_show_forgot').onclick = ev => { ev.preventDefault(); showAuth('forgot'); };
+document.getElementById('a_forgot_back').onclick = () => showAuth('login');
+document.getElementById('f_forgot').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const msg = document.getElementById('fg_msg');
+  const account = document.getElementById('fg_account').value.trim();
+  if (!account) { msg.className = 'msg err'; msg.textContent = 'Enter your username or email.'; return; }
+  msg.className = 'msg'; msg.textContent = '…';
+  try {
+    const res = await fetch('/api/auth/forgot', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account }) });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || res.statusText);
+    msg.className = 'msg ok'; msg.textContent = j.message;
+  } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+};
 async function acctSubmit(ev, path, ids, msgId) {
   ev.preventDefault();
   const msg = document.getElementById(msgId);
@@ -270,7 +302,8 @@ async function acctSubmit(ev, path, ids, msgId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: document.getElementById(ids.user).value,
         password: document.getElementById(ids.pass).value,
-        display_name: ids.disp ? document.getElementById(ids.disp).value : '' }) });
+        display_name: ids.disp ? document.getElementById(ids.disp).value : '',
+        email: ids.email ? document.getElementById(ids.email).value : '' }) });
     const j = await res.json();
     if (!res.ok) throw new Error(j.error || res.statusText);
     msg.textContent = '';
@@ -286,10 +319,11 @@ async function acctSubmit(ev, path, ids, msgId) {
 document.getElementById('f_login').onsubmit = ev =>
   acctSubmit(ev, '/api/auth/login', { user: 'a_user', pass: 'a_pass' }, 'a_msg');
 document.getElementById('f_reg').onsubmit = ev =>
-  acctSubmit(ev, '/api/auth/register', { user: 'r_user', pass: 'r_pass', disp: 'r_disp' }, 'r_msg');
+  acctSubmit(ev, '/api/auth/register', { user: 'r_user', pass: 'r_pass', disp: 'r_disp', email: 'r_email' }, 'r_msg');
 document.getElementById('a_show_reg').onclick = () => showAuth('reg');
 document.getElementById('a_show_login').onclick = () => showAuth('login');
 if (location.hash === '#register') showAuth('reg');
+if (location.hash === '#forgot') showAuth('forgot');
 initAccount();
 
 /* ---------------- race board: live map + standings ---------------- */

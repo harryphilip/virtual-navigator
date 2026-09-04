@@ -7,6 +7,7 @@ import pytest
     ("/race", "Enter this race"),
     ("/user", "Route history"),
     ("/how", "How the race is sailed"),
+    ("/reset", "Choose a new password"),
 ])
 def test_pages_are_served(client, path, needle):
     r = client.get(path)
@@ -15,7 +16,7 @@ def test_pages_are_served(client, path, needle):
 
 
 def test_every_page_links_to_how_it_works_and_carries_the_footer(client):
-    for path in ("/", "/race", "/user", "/how"):
+    for path in ("/", "/race", "/user", "/how", "/reset"):
         html = client.get(path).get_data(as_text=True)
         assert 'href="/how"' in html, path
         assert "Not for navigation" in html, path
