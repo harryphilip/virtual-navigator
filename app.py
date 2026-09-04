@@ -8,11 +8,12 @@ import json
 import os
 import re
 import secrets
+import logging
 import threading
 import time
-import traceback
 
 from flask import Flask, jsonify, request, send_from_directory, Response
+from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from vn import ais, yb
@@ -30,6 +31,11 @@ from vn.wind import heal_fallback, wind_health
 
 app = Flask(__name__, static_folder="public", static_url_path="")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)   # Fly's TLS proxy
+
+log = logging.getLogger("vn")
+if not logging.getLogger().handlers:      # gunicorn captures stdout; one line per event
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 TRACK_MAX_POINTS = 400
 SESSION_COOKIE = "vn_session"
@@ -152,6 +158,55 @@ def _decimate(rows, cap=TRACK_MAX_POINTS):
     out = [rows[int(i * stride)] for i in range(cap)]
     out[-1] = rows[-1]
     return out
+
+
+# ---------- errors, headers, crawlers ----------------------------------------
+
+@app.errorhandler(Exception)
+def handle_error(e):
+    """HTTP errors pass through (a JSON 404 under /api, the branded page
+    elsewhere); anything else is logged with the route and the user, and
+    answered with a plain 500 instead of a traceback."""
+    if isinstance(e, HTTPException):
+        if e.code == 404 and not request.path.startswith("/api/"):
+            return send_from_directory("public", "404.html"), 404
+        if request.path.startswith("/api/"):
+            return jsonify({"error": e.description or e.name}), e.code
+        return e
+    who = None
+    try:
+        u = current_user(get_db())
+        who = u["username"] if u else None
+    except Exception:
+        pass
+    log.exception("500 on %s %s (user=%s)", request.method, request.path, who)
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Something went wrong on the server. It has been logged."}), 500
+    return "Something went wrong on the server. It has been logged.", 500
+
+
+@app.after_request
+def harden(resp):
+    h = resp.headers
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    h.setdefault("X-Frame-Options", "DENY")
+    h.setdefault("Permissions-Policy", "geolocation=(), camera=(), microphone=()")
+    if request.is_secure:
+        h.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    if request.path.startswith("/vendor/"):
+        h["Cache-Control"] = "public, max-age=31536000, immutable"
+    return resp
+
+
+@app.get("/robots.txt")
+def robots():
+    return Response("User-agent: *\nDisallow: /api/\nAllow: /\n", mimetype="text/plain")
+
+
+@app.get("/favicon.ico")
+def favicon_ico():
+    return send_from_directory("public", "favicon.svg", mimetype="image/svg+xml")
 
 
 # ---------- pages -----------------------------------------------------------
@@ -1251,9 +1306,9 @@ def _tick():
     try:
         healed = heal_fallback(db, now)
         if healed:
-            print(f"[ticker] weather: {healed} placeholder cell(s) replaced with real data")
+            log.info("weather: %d placeholder cell(s) replaced with real data", healed)
     except Exception:
-        traceback.print_exc()
+        log.exception("weather heal failed")
 
     # weather health is judged per race, over the water that race sails, and
     # every transition goes on that race's committee log
@@ -1269,7 +1324,7 @@ def _tick():
                    "again; route submissions reopened.")
             add_race_log(db, r["id"], msg)
             db.commit()
-            print(f"[ticker] race {r['id']}: {msg}")
+            log.info("race %s: %s", r["id"], msg)
         _wx_degraded[r["id"]] = wx["degraded"]
 
     for r in live:
@@ -1278,7 +1333,7 @@ def _tick():
             try:
                 _poll_yb(db, r)
             except Exception:
-                traceback.print_exc()
+                log.exception("yb poll failed for race %s", r["id"])
 
         latest = db.execute(
             "SELECT MAX(issued_at) m FROM forecast_snapshots WHERE race_id=?",
@@ -1286,9 +1341,9 @@ def _tick():
         if latest is None or now - latest >= SNAPSHOT_SECONDS:
             try:
                 make_snapshot(db, r)
-                print(f"[ticker] forecast snapshot for race {r['id']}")
+                log.info("forecast snapshot for race %s", r["id"])
             except Exception:
-                traceback.print_exc()
+                log.exception("forecast snapshot failed for race %s", r["id"])
     _tick_done_at = time.time()
 
 
@@ -1334,7 +1389,7 @@ def _poll_yb(db, race):
         if rb_id and pts:
             added += ingest_points(db, race, marks, rb_id, pts)
     if added:
-        print(f"[ticker] yb.tl/{race['yb_slug']}: {added} new positions")
+        log.info("yb.tl/%s: %d new positions", race["yb_slug"], added)
 
 
 def _ticker_loop():
@@ -1342,7 +1397,7 @@ def _ticker_loop():
         try:
             _tick()
         except Exception:
-            traceback.print_exc()
+            log.exception("tick failed")
         time.sleep(TICK_SECONDS)
 
 
