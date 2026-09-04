@@ -74,6 +74,21 @@ def parse_time(s):
         return None
 
 
+def report_position(meta, body):
+    """Where a position report puts the boat.  aisstream's MetaData spells it
+    'latitude' / 'longitude' — lower case, unlike every other key in the
+    envelope — while the typed body under Message spells it 'Latitude' /
+    'Longitude'.  Read whichever is there; AIS 'not available' (91, 181)
+    counts as no position."""
+    for d, (ka, ko) in ((meta, ("latitude", "longitude")),
+                        (meta, ("Latitude", "Longitude")),
+                        (body, ("Latitude", "Longitude"))):
+        lat, lon = d.get(ka), d.get(ko)
+        if lat is not None and lon is not None and abs(lat) <= 90 and abs(lon) <= 180:
+            return float(lat), float(lon)
+    return None, None
+
+
 def race_box(marks, margin=BOX_MARGIN_DEG):
     lats = [m["lat"] for m in marks]
     lons = [m["lon"] for m in marks]
@@ -189,8 +204,8 @@ class AISFeed(threading.Thread):
             return 0
         if mt not in POSITION_TYPES:
             return 0
-        lat, lon = meta.get("Latitude"), meta.get("Longitude")
-        if lat is None or lon is None:
+        lat, lon = report_position(meta, (msg.get("Message") or {}).get(mt) or {})
+        if lat is None:
             return 0
         t = parse_time(meta.get("time_utc")) or int(time.time())
         stored = 0
