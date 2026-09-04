@@ -171,6 +171,11 @@ def user_page():
     return send_from_directory("public", "user.html")
 
 
+@app.get("/how")
+def how_page():
+    return send_from_directory("public", "how.html")
+
+
 # ---------- accounts ---------------------------------------------------------
 
 @app.post("/api/auth/register")

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it works · Virtual Navigator</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="site">
+  <div class="logo"><a href="/" style="color:inherit"><svg viewBox="0 0 56 44" aria-hidden="true"><line x1="5" y1="2" x2="5" y2="42" stroke="currentColor" stroke-width="3"></line><path d="M8 4 L52 22 L8 40 Z" fill="#c8102e"></path><path d="M12 27 C 18 18, 24 18, 29 23 C 33 27, 37 26, 41 21" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path></svg><span>Virtual Navigator</span></a></div>
+  <div class="sub">How it works</div>
+  <div class="right"><a href="/how">How it works</a></div>
+</header>
+
+<div class="wrap doc">
+  <h1 class="doc-title">How the race is sailed</h1>
+  <p class="lead">Everything the engine does to your boat, in the order it does it.
+  Nothing here is hidden from the fleet: every navigator sails the same rules
+  through the same weather.</p>
+
+  <nav class="doc-toc small" aria-label="Sections">
+    <a href="#boat">The boat</a> · <a href="#weather">The weather</a> ·
+    <a href="#course">The course</a> · <a href="#route">Changing your route</a> ·
+    <a href="#penalties">Penalties</a> · <a href="#committee">Committee actions</a> ·
+    <a href="#public">What is public</a> · <a href="#software">Your navigation software</a>
+  </nav>
+
+  <div class="card" id="boat">
+    <h2>The boat</h2>
+    <p><b>One polar for the whole fleet.</b> Each race carries one class polar,
+    the standard text table your routing software reads and writes: a header
+    row of true wind speeds, one row per true wind angle. A performance factor
+    (usually 90%) derates it to the speed a well-sailed boat actually makes.
+    You can download the exact polar from every race page.</p>
+    <p><b>The boat steers itself toward your next waypoint.</b> At every step
+    it picks the heading that makes the best speed toward that waypoint (best
+    VMC). A waypoint dead upwind or dead downwind is still reachable; the boat
+    sails the tacking or gybing angle that gets there fastest and holds its
+    position on the line to the waypoint.</p>
+    <p><b>Tacks and gybes cost time.</b> The boat holds its tack until the other
+    is clearly faster (about 3% better), then crosses the wind and stands still
+    for the race's manoeuvre penalty, typically 90 to 120 seconds. The count of
+    tacks and gybes shows in your boat panel.</p>
+  </div>
+
+  <div class="card" id="weather">
+    <h2>The weather</h2>
+    <p><b>Real wind, in near-real time.</b> Wind at 10 m comes from Open-Meteo,
+    hourly, on a 0.25° grid, interpolated between hours. The engine evaluates
+    each boat with the wind that was actually forecast for that hour, so nobody,
+    the server included, knows the future.</p>
+    <p><b>Current sets the fleet.</b> Where a race has currents on, real surface
+    current from the same source pushes every boat, sailing or parked, for the
+    whole step.</p>
+    <p><b>Ten-minute steps.</b> Boats advance every few minutes (the race page
+    says how many) whether or not anyone is watching. Each step is written to a
+    public track.</p>
+    <p><b>The forecast you sail is the forecast you get.</b> Every six hours the
+    server saves the wind forecast over the race area as a GRIB file. Download
+    it from the race page into qtVlm, Expedition or XyGrib and route with exactly
+    what was known at the time.</p>
+    <p><b>If the weather feed goes down</b>, the boats keep sailing on placeholder
+    wind, the race page shows a warning, and route submissions pause until real
+    data is back, so nobody can route against invented weather. The committee
+    log records when it happened and when it recovered.</p>
+  </div>
+
+  <div class="card" id="course">
+    <h2>The course</h2>
+    <p><b>Marks and the mark radius.</b> A race is a list of marks: start,
+    roundings, finish. A boat passes a mark when its path comes within the race's
+    mark radius (usually 2 nm) of it. Some marks must be left to port or to
+    starboard, and the race page says which.</p>
+    <p><b>Your route is reconciled with the course when you submit it.</b>
+    Routing software rarely lands exactly on our marks. Waypoints you are already
+    standing on are skipped. Where your route never comes within the mark radius
+    of a required mark, the mark is inserted at the closest approach. A pass on
+    the wrong side of a sided mark, or straight over it, is rebuilt as a rounding
+    on the correct side. Every adjustment is reported back to you. You always
+    sail the real course; there is nothing to gain by cutting a mark and no
+    disqualification when your finish line sits half a mile from ours.</p>
+    <p><b>Exclusion zones drag.</b> Traffic separation schemes, ice limits and
+    wildlife zones are drawn red on the chart. A boat inside one sails at half
+    speed. Inside is always slower than around.</p>
+    <p><b>Shallow water drags too.</b> Real bathymetry is checked every step. In
+    less water than the race's grounding depth (usually 15 ft) the boat drags
+    through at half speed. There is no land avoidance: a route across a headland
+    will try to sail it, slowly, so route around land like you would offshore.</p>
+  </div>
+
+  <div class="card" id="route">
+    <h2>Changing your route</h2>
+    <p><b>Only the future changes.</b> When you submit a new route, the boat is
+    first sailed up to now under the old one. Everything sailed is locked; only
+    waypoints not yet reached are replaced. Time never rewinds.</p>
+    <p><b>Late entries start at the line when they submit</b>, never backdated
+    to the gun. A boat with no route parks at its last position and waits.</p>
+    <p><b>Every submission is timestamped.</b> Your profile shows when each
+    route arrived and how many waypoints it carried. That log is public; the
+    waypoints themselves are not.</p>
+  </div>
+
+  <div class="card" id="penalties">
+    <h2>Penalties</h2>
+    <p>None of them disqualify you and none shorten the course. In full:</p>
+    <ul class="steplist small">
+      <li>Each tack or gybe: the race's manoeuvre penalty, in seconds of stopped time.</li>
+      <li>Each step inside an exclusion zone: half speed.</li>
+      <li>Each step in water shallower than the grounding depth: half speed.</li>
+      <li>A route that misses a mark: the mark is inserted into your route, so you sail to it.</li>
+      <li>A route that passes a sided mark the wrong way: rebuilt as a rounding on the correct side.</li>
+    </ul>
+  </div>
+
+  <div class="card" id="committee">
+    <h2>Committee actions</h2>
+    <p>Race committees correct things, and so does this one: a mark placed
+    wrongly, a start postponed, a zone added from the sailing instructions, a
+    bad weather fetch. Every such change goes on the race page's committee log
+    with when and why.</p>
+    <p><b>A restart</b> means the committee re-sailed a boat from the gun,
+    through the recorded wind, on its latest route. It is how a boat is made
+    whole after a correction; nobody gains or loses from it.</p>
+  </div>
+
+  <div class="card" id="public">
+    <h2>What is public</h2>
+    <p>Your sailed track, your position, your tacks and groundings, and the
+    times you submitted routes are public, like any race tracker. Your future
+    waypoints are private to you. An account is a username, a display name and
+    a password hash; no email is kept, which also means there is no password
+    reset.</p>
+  </div>
+
+  <div class="card" id="software">
+    <h2>Your navigation software</h2>
+    <p>Plain text formats throughout, so anything works. qtVlm is free;
+    Expedition, Adrena, TimeZero, LuckGrib, OpenCPN and PredictWind all read and
+    write the same files.</p>
+    <h3>Getting the polar in</h3>
+    <p>Each race page offers the polar as a <code>.pol</code> text file (TWA
+    rows, TWS columns). Apply the race performance factor so your routing
+    matches how the boat sails here.</p>
+    <h3>Getting the course in</h3>
+    <p>Every race page offers the marks as a GPX route. Import it, route between
+    the marks with the race GRIBs, and upload the result.</p>
+    <h3>Getting your route out</h3>
+    <p>Export your route as GPX, or as CSV with lat and lon columns, and upload
+    it on the race page. You see it on the chart before it replaces anything.
+    Only the waypoints matter: your boat sails them in order at polar speed
+    through real wind.</p>
+    <h3>Getting your track back</h3>
+    <p>Download your sailed track as GPX from the race page and overlay it on the
+    GRIBs in your software to see where your routing gained or lost. Your
+    current position is also a one-waypoint GPX: import it as the departure
+    point for the next routing run.</p>
+  </div>
+
+  <footer class="site-foot">
+    <p><b>Not for navigation.</b> Virtual Navigator is a simulation. Nothing here
+    may be used to navigate a vessel.</p>
+    <p>Wind and current: <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a>
+    (CC BY 4.0). Charts: NOAA ENC, <a href="https://www.openstreetmap.org/copyright"
+    rel="noopener">OpenStreetMap</a> contributors, OpenSeaMap. Bathymetry: NOAA NCEI.
+    Polars: meltemus.com. Real-boat positions: YB Tracking and aisstream.io, shown
+    for comparison only. Not affiliated with any race organiser.</p>
+    <p><b>Your data.</b> An account is a username, a display name and a password
+    hash. No email is kept, so there is no password reset. Sailed tracks and
+    submission times are public; future waypoints are not. The session cookie
+    lasts 90 days. Pages load fonts from Google and map tiles from OpenStreetMap
+    and NOAA, which see your IP address.</p>
+  </footer>
+</div>
+
+<script src="/js/auth.js"></script>
+</body>
+</html>

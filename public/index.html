@@ -14,38 +14,35 @@
 <header class="site">
   <div class="logo"><svg viewBox="0 0 56 44" aria-hidden="true"><line x1="5" y1="2" x2="5" y2="42" stroke="currentColor" stroke-width="3"></line><path d="M8 4 L52 22 L8 40 Z" fill="#c8102e"></path><path d="M12 27 C 18 18, 24 18, 29 23 C 33 27, 37 26, 41 21" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path></svg><span>Virtual Navigator</span></div>
   <div class="sub">real races · real weather · real fleet</div>
-  <div class="right"></div>
+  <div class="right"><a href="/how">How it works</a></div>
 </header>
 
 <div class="wrap">
 
   <div class="hero">
-    <h1>Route the real race. Sail the real weather.</h1>
-    <p class="lead">Pick an offshore race that is actually on and submit a
-    route. Your boat sails it through today's wind and current, on the same
-    leaderboard as the real fleet. One polar for everyone: the routing wins,
-    not the boat.</p>
-    <div class="hero-tiles">
-      <div><b>Real decisions</b><br>
-        The same forecasts and the same trade-offs a navigator faces on
-        board. Take the shift now, or hold on for the tide gate.</div>
-      <div><b>No hindsight</b><br>
-        Your route locks in as it is sailed. Results reflect what you knew
-        when you chose, not what the weather did later.</div>
-      <div><b>Beat the real boats on navigation</b><br>
-        The real fleet is on the same leaderboard. Afterwards the gap to any
-        tracked boat is split into boat speed and navigation, so you know
-        whether they were faster or smarter.</div>
+    <div class="hero-text">
+      <h1>Route the real race. Sail the real weather.</h1>
+      <p class="lead">Pick an offshore race that is actually on and submit a
+      route. Your boat sails it through today's wind and current, on the same
+      leaderboard as the real fleet. One polar for everyone: the routing wins,
+      not the boat. Your route locks in as it is sailed, so results reflect
+      what you knew when you chose. Afterwards the gap to any real boat is
+      split into boat speed and navigation, so you know whether they were
+      faster or smarter.</p>
+      <div class="hero-cta">
+        <a href="#live" id="cta_race"><button>Enter a race</button></a>
+        <a href="/how" class="small" id="cta_how">How it works</a>
+      </div>
+      <div class="small muted" id="cta_note"></div>
     </div>
-    <div style="margin-top:16px">
-      <a href="#live"><button>Enter a race</button></a>
-      <a href="#start"><button class="ghost">How it works</button></a>
+    <div class="hero-chart">
+      <div id="home_map"></div>
+      <div class="small muted" id="home_map_cap">Live courses and leaders. Enter a race from the board below.</div>
     </div>
   </div>
 
   <div class="card" id="live">
     <h2>Race board</h2>
-    <div id="home_map" style="display:none"></div>
     <div id="race_list"></div>
     <div id="norace" class="muted small" style="display:none;margin-top:8px">
       No races yet.
@@ -74,6 +71,8 @@
       <li><b>Compare afterwards.</b> Download your sailed track as GPX and
         overlay it on the real fleet's to see where you gained and lost.</li>
     </ol>
+    <p class="small muted" style="margin:8px 0 0">The full rules, the weather
+    model and the file formats are on <a href="/how">How it works</a>.</p>
   </div>
 
   <div class="card" id="account">
@@ -113,24 +112,6 @@
       </form>
     </div>
     <div id="acct_in" style="display:none" class="small"></div>
-  </div>
-
-  <div class="card">
-    <h2>House rules</h2>
-    <ol class="steplist small">
-      <li><b>One polar for the whole fleet</b>, scaled to a realistic
-        performance factor. Nobody wins on boat speed, only on routing.</li>
-      <li><b>Your boat sails your waypoints</b> through real wind and current,
-        updated every few minutes. It steers for best VMC (speed made good
-        toward the next waypoint), so a header never parks it head to
-        wind.</li>
-      <li><b>Updates replace only the future.</b> What you've sailed is locked.
-        Tacks and gybes cost time, water under 15 ft halves your speed, and a
-        route that misses a mark is bent back through it. No disqualifications,
-        no shortened courses.</li>
-      <li><b>Your future route is private.</b> Your sailed track is public,
-        like any race tracker.</li>
-    </ol>
   </div>
 
   <div class="card" id="autocreate_card" style="display:none">
@@ -225,24 +206,6 @@
     </div>
   </div>
 
-  <div class="card small">
-    <h2>Connecting your navigation software</h2>
-    <h3>Getting the polar in</h3>
-    <p>Each race page offers the polar as a <code>.pol</code> text file
-    (TWA rows, TWS columns). Expedition, qtVlm, OpenCPN weather_routing, Adrena
-    and most others read it. Apply the race performance factor so your routing
-    matches how the boat sails here.</p>
-    <h3>Getting the course in</h3>
-    <p>Every race page offers the marks as a <b>course route (.gpx)</b>. Import
-    it, route between the marks with your GRIBs, and upload the result.</p>
-    <h3>Getting your routing out</h3>
-    <p>Export your route as <b>GPX</b>, or as CSV with lat/lon columns, and
-    upload it on the race page. Only the waypoints matter: your boat sails them
-    in order at polar speed through real wind.</p>
-    <h3>Getting your track back</h3>
-    <p>Download your sailed track as GPX from the race page and overlay it on
-    the GRIBs in your software to see where your routing gained or lost.</p>
-  </div>
   <footer class="site-foot">
     <p><b>Not for navigation.</b> Virtual Navigator is a simulation. Nothing here
     may be used to navigate a vessel.</p>
@@ -334,7 +297,6 @@ const COURSE_INK = '#c2185b';       // chart magenta, like a plotted route
 function ensureMap() {
   if (homeMap) return;
   const el = document.getElementById('home_map');
-  el.style.display = 'block';
   homeMap = L.map('home_map', { worldCopyJump: true, scrollWheelZoom: false })
     .setView([40, -40], 3);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -351,22 +313,40 @@ function until(ts) {
   return d ? `in ${d} d ${h} h` : h ? `in ${h} h ${m} min` : `in ${m} min`;
 }
 
+let fitted = false;
 async function loadRaces() {
-  const races = await (await fetch('/api/overview')).json();
+  let races;
+  try {
+    races = await (await fetch('/api/overview')).json();
+  } catch (e) {
+    document.getElementById('norace').textContent = 'The race board is not answering. Try again in a minute.';
+    document.getElementById('norace').style.display = 'block';
+    return;
+  }
   const list = document.getElementById('race_list');
   document.getElementById('norace').style.display = races.length ? 'none' : 'block';
   list.innerHTML = '';
-  if (races.length) ensureMap();
+  ensureMap();
   if (courseLayer) courseLayer.clearLayers();
   const bounds = [];
+  const live = races.filter(r => r.status === 'racing');
+  const featured = live[0] || races.find(r => r.status === 'upcoming');
+  const cta = document.getElementById('cta_race');
+  if (featured) {
+    cta.href = `/race?id=${featured.id}`;
+    cta.querySelector('button').textContent = `Enter ${featured.name}`;
+    document.getElementById('cta_note').textContent = featured.status === 'racing'
+      ? `Racing now · ${featured.entries_total} boat${featured.entries_total === 1 ? '' : 's'} on the course`
+      : `Starts ${until(featured.start_time)}`;
+  }
 
   races.forEach((r, i) => {
     if (homeMap && r.marks.length > 1) {
-      L.polyline(r.marks, { color: COURSE_INK, weight: 2, dashArray: '5 6', opacity: .9 })
+      L.polyline(r.marks, { color: COURSE_INK, weight: r.status === 'racing' ? 2.5 : 1.5,
+                            dashArray: '5 6', opacity: r.status === 'racing' ? .95 : .5 })
         .addTo(courseLayer)
-        .bindTooltip(`${esc(r.name)} — ${r.course_len_nm} nm`, { className: 'boat-label', sticky: true })
-        .on('click', () => location.href = `/race?id=${r.id}`);
-      r.marks.forEach(m => bounds.push(m));
+        .bindTooltip(`${esc(r.name)} · ${r.course_len_nm} nm`, { className: 'boat-label', sticky: true });
+      if (!live.length || r.status === 'racing') r.marks.forEach(m => bounds.push(m));
       (r.leaders || []).forEach(p =>
         L.circleMarker(p, { radius: 4, color: '#101214', weight: 1, fillColor: COURSE_INK, fillOpacity: 1 })
           .addTo(courseLayer));
@@ -399,8 +379,10 @@ async function loadRaces() {
         ${body}
       </div>`);
   });
-  if (homeMap && bounds.length)
+  if (homeMap && bounds.length && !fitted) {
     homeMap.fitBounds(L.latLngBounds(bounds).pad(0.15));
+    fitted = true;                      // a later poll must not undo the visitor's panning
+  }
 }
 
 document.getElementById('c_go').onclick = async () => {
