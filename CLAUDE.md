@@ -25,6 +25,27 @@ needed for anything you can only run there, like a `scripts/` ops tool. Merge
 after it works, not before. There is never a reason to merge early just to get
 code onto the box.
 
+## One session, one worktree
+
+Several Claude sessions often work in this repo at the same time. A branch
+does not isolate them: one checkout has one HEAD, so `git switch` in one
+session moves every session onto that branch and drags along whatever
+uncommitted edits are sitting in the tree.
+
+Before you edit, run `git status` and `git branch --show-current`. If the
+tree already holds changes that aren't yours, or the branch isn't `main`,
+someone else is working here. Do not `git switch`. Give yourself a separate
+directory instead:
+
+```bash
+git worktree add ../vn-<feature-name> -b <feature-name>
+cd ../vn-<feature-name>
+```
+
+Agents started with `isolation: "worktree"` get this for free. Remove the
+worktree after the merge with `git worktree remove ../vn-<feature-name>`.
+Never commit, stash, or revert files you did not change.
+
 **Branch again after you merge.** Merging and deleting the branch leaves you
 standing on `main`, so the next quick fix lands directly on it — this is how
 main picks up stray commits in practice, and it is worth a deliberate

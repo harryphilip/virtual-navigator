@@ -13,7 +13,7 @@
 <body>
 <header class="site">
   <div class="logo"><svg viewBox="0 0 56 44" aria-hidden="true"><line x1="5" y1="2" x2="5" y2="42" stroke="currentColor" stroke-width="3"></line><path d="M8 4 L52 22 L8 40 Z" fill="#c8102e"></path><path d="M12 27 C 18 18, 24 18, 29 23 C 33 27, 37 26, 41 21" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path></svg><span>Virtual Navigator</span></div>
-  <div class="sub">fantasy offshore racing — route it like you're on board</div>
+  <div class="sub">fantasy offshore racing, sailed in real weather</div>
   <div class="right"></div>
 </header>
 
@@ -21,23 +21,20 @@
 
   <div class="hero">
     <h1>Learn offshore navigation by doing it.</h1>
-    <p class="lead">If you sail, navigation is the skill you can practice from
-    home: read the forecast, commit to a route, live with the result. Enter a
-    real race here, submit your routing, and the ocean sails it — in the
-    actual weather, alongside the boats that are really out there.</p>
+    <p class="lead">Pick a real offshore race and submit a route. A virtual
+    boat sails it through the actual weather, alongside the real fleet. Read
+    the forecast, commit to a plan, and see how it works out.</p>
     <div class="hero-tiles">
-      <div><b>The real decisions</b><br>
-        Same forecasts, same trade-offs a navigator faces on board — take the
-        shift now or hold for the current gate — practiced before you're the
-        one on watch offshore.</div>
-      <div><b>Honest feedback</b><br>
-        Your route locks as it's sailed, so results reflect what you knew
-        when you chose — not what the weather turned out to be. That's how
-        judgment gets built.</div>
-      <div><b>A fleet to measure against</b><br>
-        Other navigators and the real boats on the tracker share your
-        leaderboard. Afterward, lay your track over theirs and see exactly
-        where the miles were won.</div>
+      <div><b>Real decisions</b><br>
+        The same forecasts and the same trade-offs a navigator faces on
+        board. Take the shift now, or hold on for the current gate.</div>
+      <div><b>No hindsight</b><br>
+        Your route locks in as it is sailed. Results reflect what you knew
+        when you chose, not what the weather did later.</div>
+      <div><b>A fleet to compare against</b><br>
+        Other navigators and the real boats on the tracker share one
+        leaderboard. Afterwards, lay your track over theirs and see where
+        the miles went.</div>
     </div>
     <div style="margin-top:16px">
       <a href="#live"><button>Pick a race</button></a>
@@ -55,30 +52,26 @@
   </div>
 
   <div class="card" id="start">
-    <h2>Never navigated an offshore race? Start here</h2>
+    <h2>First race? Start here</h2>
     <p class="small muted" style="margin:4px 0 10px">
-      Offshore navigation is a real discipline — reading forecasts, picking a
-      lane, trading distance for wind. This is the lowest-stakes way there is
-      to learn it: the boat is virtual, the ocean isn't.</p>
+      You don't need routing software or offshore experience. The boat is
+      virtual; the weather is real.</p>
     <ol class="steplist small">
-      <li><b>Register</b> (free, below) and open a race that's upcoming or in
-        progress, then register a boat on its page.</li>
-      <li><b>No software needed to play:</b> hit <i>Draw on chart</i>, click a
-        line of waypoints from start to finish, submit. You're racing. A
-        straight line is a legitimate first strategy — the leaderboard will
-        teach you why the winners didn't sail one.</li>
-      <li><b>Look at the weather once a day.</b> Download the race's
-        <i>on-board forecast</i> (a GRIB file — the same wind your boat will
-        sail) and adjust the part of your route you haven't sailed yet.
-        Position, forecast, tweak: that's the whole navigator's loop.</li>
-      <li><b>Level up with free tools.</b> <a href="https://www.meltemus.com/index.php/en/"
-        target="_blank" rel="noopener">qtVlm</a> is free routing software the
-        pros practice on: import the race's <i>course route</i> and
-        <i>polar</i>, load the GRIB, let it compute an optimal route, export
-        GPX, upload here. Now you're weather routing like a Vendée navigator.</li>
-      <li><b>Compare your wake.</b> Your sailed track downloads as GPX —
-        overlay it on the real fleet's and see exactly where the ocean
-        agreed with you.</li>
+      <li><b>Register</b> below (free), open an upcoming or live race, and
+        enter a boat on its page.</li>
+      <li><b>Draw a route.</b> Click <i>Draw on map</i>, click a line of
+        waypoints from start to finish, and submit. A straight line is a fine
+        first route. The leaderboard will show you why the leaders didn't
+        sail one.</li>
+      <li><b>Check the weather once a day.</b> Download the race's
+        <i>on-board forecast</i> (a GRIB file with the same wind your boat
+        sails in) and adjust the part of your route you haven't sailed yet.</li>
+      <li><b>Try routing software.</b> <a href="https://www.meltemus.com/index.php/en/"
+        target="_blank" rel="noopener">qtVlm</a> is free. Import the race's
+        <i>course route</i> and <i>polar</i>, load the GRIB, compute a route,
+        export it as GPX and upload it here.</li>
+      <li><b>Compare afterwards.</b> Download your sailed track as GPX and
+        overlay it on the real fleet's to see where you gained and lost.</li>
     </ol>
   </div>
 
@@ -96,9 +89,8 @@
       </div>
       <div class="msg" id="a_msg"></div>
       <p class="small muted" style="margin:6px 0 0">Navigators enter races and
-      submit routings. The first account on a fresh server becomes the admin;
-      admins create races (and race too — their profile is a navigator profile
-      like any other).</p>
+      submit routings. Admins also create races. The first account on a new
+      server becomes the admin.</p>
     </div>
     <div id="acct_in" style="display:none" class="small"></div>
   </div>
@@ -106,29 +98,28 @@
   <div class="card">
     <h2>The rules of the game</h2>
     <ol class="steplist small">
-      <li><b>One polar for the whole fleet</b>, derated to a realistic
-        performance factor — nobody wins on boatspeed, only on routing.</li>
-      <li><b>Your boat sails your waypoints</b> through real surface wind and
-        current every few minutes, steering best-VMC toward your next mark —
-        a wind shift never parks you head-to-wind.</li>
-      <li><b>Updates replace only the future.</b> The past is locked, tacks and
-        gybes cost seconds, water under 15 ft costs half your speed, and a
-        routing that misses a mark gets bent back through it — never
-        disqualified, never shortened.</li>
-      <li><b>Your future route is private</b> until sailed; your wake is
-        public, like any race tracker.</li>
+      <li><b>One polar for the whole fleet</b>, scaled to a realistic
+        performance factor. Nobody wins on boat speed, only on routing.</li>
+      <li><b>Your boat sails your waypoints</b> through real wind and current,
+        updated every few minutes. It steers the best VMC toward the next
+        waypoint, so a wind shift never parks it head to wind.</li>
+      <li><b>Updates replace only the future.</b> What you've sailed is locked.
+        Tacks and gybes cost time, water under 15 ft halves your speed, and a
+        route that misses a mark is bent back through it. No disqualifications,
+        no shortened courses.</li>
+      <li><b>Your future route is private.</b> Your sailed track is public,
+        like any race tracker.</li>
     </ol>
   </div>
 
   <div class="card" id="autocreate_card" style="display:none">
-    <h2>⚡ Auto-create from the Notice of Race / Sailing Instructions</h2>
+    <h2>Create a race from the Notice of Race / Sailing Instructions</h2>
     <p class="small muted" style="margin:4px 0 10px">
-      Drop in the official race documents (PDF or text) and a virtual race is
-      created automatically — name, start time, and course marks are read from
-      the documents, which are attached to the race page for competitors.
-      Marks are only taken from positions stated in the documents, never
-      guessed. AI document reading needs Anthropic credentials on the server;
-      otherwise a pattern parser handles documents with coordinate tables.</p>
+      Upload the official race documents (PDF or text). The name, start time
+      and course marks are read from them, and the documents are attached to
+      the race page. Marks are only taken from positions stated in the
+      documents, never guessed. Reading prose needs Anthropic credentials on
+      the server; without them, a pattern parser reads coordinate tables.</p>
     <label>Documents (NoR, SIs, course appendix — PDF or .txt, multiple OK)</label>
     <input type="file" id="d_files" multiple accept=".pdf,.txt,.text">
     <label>…or paste the relevant text (course table, start schedule)</label>
@@ -200,10 +191,10 @@
     <div class="msg" id="c_msg"></div>
     <div id="c_next" style="display:none" class="small">
       <h3>Link the real fleet (YB Tracking)</h3>
-      <p class="muted">If the real race is on yb.tl, enter its slug (the bit after
-      <code>yb.tl/</code>) to import the fleet and let the server poll positions
-      every 10 minutes. Optional filter keeps only boats whose model matches —
-      e.g. <code>J/122</code> to track just your polar's class.</p>
+      <p class="muted">If the real race is on yb.tl, enter its slug (the part after
+      <code>yb.tl/</code>) to import the fleet. The server then polls positions
+      every 10 minutes. The optional filter keeps only boats whose model
+      matches, e.g. <code>J/122</code>.</p>
       <div class="row">
         <div><label>YB race slug</label><input id="yb_slug" placeholder="fastnet2025"></div>
         <div><label>Model filter (optional)</label><input id="yb_filter" placeholder="IMOCA"></div>
@@ -217,25 +208,24 @@
     <h2>Connecting your navigation software</h2>
     <h3>Getting the polar in</h3>
     <p>Each race page offers the polar as a <code>.pol</code> text file
-    (TWA rows × TWS columns) — the format read by Expedition, qtVlm, OpenCPN
-    weather_routing, Adrena and most others. Apply the race performance factor
-    if you want your routing to match how the boat actually sails here.</p>
+    (TWA rows, TWS columns). Expedition, qtVlm, OpenCPN weather_routing, Adrena
+    and most others read it. Apply the race performance factor so your routing
+    matches how the boat sails here.</p>
     <h3>Getting the course in</h3>
-    <p>Every race page offers the official marks as a <b>course route (.gpx)</b> —
-    import it into your software, route between the marks with your GRIBs, and
-    the exported result is your first submission.</p>
+    <p>Every race page offers the marks as a <b>course route (.gpx)</b>. Import
+    it, route between the marks with your GRIBs, and upload the result.</p>
     <h3>Getting your routing out</h3>
-    <p>Export the optimal route as <b>GPX</b> (universally supported) or CSV with
-    lat/lon columns, and upload it on the race page. Only the waypoints matter —
-    your boat sails them in order at polar speed through real wind.</p>
-    <h3>Getting your boat back in</h3>
-    <p>Download your sailed track as GPX from the race page and overlay it in your
-    software against the GRIBs to see where your routing won or lost.</p>
+    <p>Export your route as <b>GPX</b>, or as CSV with lat/lon columns, and
+    upload it on the race page. Only the waypoints matter: your boat sails them
+    in order at polar speed through real wind.</p>
+    <h3>Getting your track back</h3>
+    <p>Download your sailed track as GPX from the race page and overlay it on
+    the GRIBs in your software to see where your routing gained or lost.</p>
     <h3>Real fleet</h3>
     <p>Race admins can import tracker positions for the real boats (GPX track or
-    CSV <code>time,lat,lon</code> — e.g. exported from YB/Yellowbrick race viewers)
-    and tag each with a class label, so the leaderboard shows how you stack up
-    against the boats actually sailing your polar.</p>
+    CSV <code>time,lat,lon</code>, e.g. from YB race viewers) and tag each with
+    a class, so the leaderboard shows you against the boats actually sailing
+    your polar.</p>
   </div>
 </div>
 
@@ -253,9 +243,8 @@ async function initAccount() {
   if (u) {
     acctIn.innerHTML = `Signed in as <a href="/user?u=${encodeURIComponent(u.username)}">` +
       `<b>${esc(u.display_name)}</b></a>` +
-      (u.is_admin ? ' — admin: you can create races below.' :
-       ' — navigator: pick a race and register a boat on its page. ' +
-       'Race creation needs an admin account.');
+      (u.is_admin ? ' — admin. You can create races below.' :
+       ' — navigator. Pick a race and enter a boat on its page.');
   }
   for (const id of ['create_card', 'autocreate_card']) {
     const el = document.getElementById(id);
@@ -272,7 +261,7 @@ async function acctSubmit(path) {
         display_name: document.getElementById('a_disp').value }) });
     const j = await res.json();
     if (!res.ok) throw new Error(j.error || res.statusText);
-    if (j.first_admin) alert('You are the first account — you have the admin role.');
+    if (j.first_admin) alert('You are the first account on this server, so you are the admin.');
     location.reload();
   } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
 }
@@ -339,8 +328,8 @@ async function loadRaces() {
          <td style="text-align:right">${t.finished ? 'finished' : t.dtf + ' nm to go'}</td></tr>`
       ).join('') + '</tbody></table>';
     } else if (r.status === 'upcoming') {
-      body = `<div class="small muted">Starts ${until(r.start_time)} — enter now, download the
-        course, polar and forecasts, and have your routing ready for the gun.</div>`;
+      body = `<div class="small muted">Starts ${until(r.start_time)}. Enter now, download the
+        course and polar, and have your routing ready for the start.</div>`;
     } else if (r.top.length) {
       body = `<div class="small muted">🏆 ${esc(r.top[0].name)} won · ${r.entries_total} boats</div>`;
     }
@@ -406,7 +395,7 @@ document.getElementById('d_go').onclick = async () => {
     return;
   }
   msg.className = 'msg';
-  msg.textContent = 'reading documents… (AI extraction can take a minute)';
+  msg.textContent = 'reading documents… (this can take a minute)';
   const fd = new FormData();
   for (const f of files) fd.append('docs', f);
   if (text) fd.append('text', text);
@@ -417,7 +406,7 @@ document.getElementById('d_go').onclick = async () => {
     const j = await res.json();
     if (res.status === 422 && j.extract) {
       msg.className = 'msg err';
-      msg.textContent = 'Course could not be extracted — the fields below are prefilled with what was found; add the marks by hand.';
+      msg.textContent = 'Could not read a course from the documents. The form below is prefilled with what was found; add the marks by hand.';
       if (j.extract.name) document.getElementById('c_name').value = j.extract.name;
       if (j.extract.start_time_utc) document.getElementById('c_start').value = j.extract.start_time_utc;
       document.getElementById('c_marks').value =

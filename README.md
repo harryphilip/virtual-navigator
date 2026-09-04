@@ -1,10 +1,10 @@
 # Virtual Navigator
 
-Fantasy offshore racing: pick a race, register a virtual boat, and submit a
-weather routing produced in your own navigation software. Every virtual boat
-sails the **same polar** through the **same real weather**, and the leaderboard
-ranks the armchair fleet alongside the **real boats on the tracker** — like
-fantasy baseball, but your lineup is a set of waypoints.
+Fantasy offshore racing. Pick a race, register a virtual boat, and submit a
+route, drawn on the map or exported from your own navigation software. Every
+virtual boat sails the **same polar** through the **same real weather**, and
+the leaderboard ranks the virtual fleet alongside the **real boats on the
+tracker**.
 
 ## Quick start
 
@@ -34,36 +34,33 @@ through real historical wind. Demo boats use PIN `0000`.
   once a minute, so the fleet keeps sailing while nobody is watching.
 - **Maneuvers cost time.** The boat holds its tack until the other tack is
   clearly faster; every tack or gybe then costs `maneuver_penalty_s` seconds
-  (default 120) of stopped time. Wiggly routings are slow routings; the tack
-  count shows in your boat panel. Because the boat always steers its best
-  VMC toward the next waypoint, a wind shift that leaves a waypoint dead
-  upwind (or dead downwind) never parks the boat — it automatically sails a
-  tacking/gybing VMG course to get there.
+  (default 120) of stopped time. The tack count shows in your boat panel.
+  Because the boat always steers its best VMC toward the next waypoint, a
+  wind shift that leaves a waypoint dead upwind (or dead downwind) never
+  parks the boat — it sails a tacking/gybing VMG course to get there.
 - **Groundings hurt but don't sink you.** Real bathymetry (NOAA global DEM,
   cached on a ~500 m grid) is checked every step: in less water than the
   race's `grounding_depth_ft` (default 15 ft) the boat drags through at
-  half speed. Shave the beach at your peril; steps spent aground show in
-  your boat panel. Patches narrower than one sim step can be hopped over —
-  it's a game, not a chart audit.
+  half speed. Steps spent aground show in your boat panel. Patches narrower
+  than one sim step can be hopped over.
 - **Exclusion zones drag like shoals.** Races can carry keep-out polygons
   (TSS boxes, ice limits, wildlife zones — importable straight from the
   linked YB tracker's course drawing). They're drawn red on the race map,
   and a virtual boat caught inside sails at half speed, same rule as
   grounding: inside is always slower than around. Steps spent in a zone
   show in your boat panel.
-- **Soft course enforcement — no cheating, no DSQ.** Routings from your own
-  software rarely land exactly on the race's marks. On submission the
-  committee reconciles them: waypoints you're already standing on are
-  skipped, and wherever the routing never passes within the mark radius of
-  a required mark (start, roundings, finish), the mark itself is inserted
-  into your route at the closest approach. Marks that must be left to port
-  or starboard are checked for the side too: the committee looks at which
-  way the mark's bearing sweeps along your leg, and a pass on the wrong side,
-  a touch-and-go at a turning mark, or a leg straight over the mark is
-  rebuilt as a rounding half a mark-radius off on the correct side. You
-  always sail the real course — there is nothing to gain by cutting a mark
-  and nothing to be disqualified for when your finish line sits half a mile
-  from ours. Every adjustment is reported back when you submit.
+- **Soft course enforcement.** Routings from your own software rarely land
+  exactly on the race's marks. On submission the server reconciles them:
+  waypoints you're already standing on are skipped, and wherever the routing
+  never passes within the mark radius of a required mark (start, roundings,
+  finish), the mark itself is inserted into your route at the closest
+  approach. Marks that must be left to port or starboard are checked for
+  side too, by which way the mark's bearing sweeps along your leg. A pass on
+  the wrong side, a touch-and-go at a turning mark, or a leg straight over
+  the mark is rebuilt as a rounding half a mark radius off on the correct
+  side. You always sail the real course, with nothing to gain by cutting a
+  mark and no disqualification when your finish line sits half a mile from
+  ours. Every adjustment is reported back when you submit.
 - **Currents set the fleet.** Real surface currents (Open-Meteo marine model,
   same 0.25° caching) push every boat — sailing or parked — so a Gulf Stream
   lane or a foul tide gate matters exactly like it does offshore. Optional
@@ -74,17 +71,17 @@ through real historical wind. Demo boats use PIN `0000`.
   replaced. Late entries start at the line at submission time, never
   backdated. Every submission is timestamped in an audit log.
 - **On-board information only.** The engine evaluates with *actual* wind in
-  near-real time, so nobody — server included — knows the future. You plan
-  with the same forecasts you'd carry on board; hindsight can't help you
-  because the past is already sailed.
+  near-real time, so nobody, server included, knows the future. You plan
+  with the same forecasts you'd carry on board, and the past is already
+  sailed.
 - **Private plans, public wakes.** Your future waypoints are visible only
   with your PIN. Your sailed track is public, like any race tracker.
 - **On-board forecast archive.** Every 6 h the ticker snapshots the wind
   forecast over the race area — from the same model that will sail the boats —
   and stores it as a real **GRIB-1 file** (10 m U/V wind, 0–120 h, validated
   against an independent GRIB reader). Download it from the race page into
-  qtVlm / Expedition / XyGrib and route with exactly what was knowable at the
-  time; the archive is the honest record for post-race arguments.
+  qtVlm / Expedition / XyGrib and route with exactly what was known at the
+  time; the archive is the record for post-race comparisons.
 - **Combined leaderboard.** Virtual boats and imported real boats are ranked
   together by distance-to-finish along the course (finish order once home).
   Real boats carry a class label, with one-click filters such as
@@ -153,7 +150,7 @@ document is downloadable from the race page.
 
 ## Integrating with navigation software
 
-The integration surface is deliberately universal:
+Plain text formats throughout, so any routing software works:
 
 | Direction | Format | Works with |
 |---|---|---|
@@ -228,6 +225,11 @@ Rules that follow from that:
 - **Verify against the live site, not the local file.** An edit that only
   exists on disk is not live. `curl` the deployed page (or open it) and
   confirm the change is actually there before calling it done.
+- **One worktree per concurrent session.** Branches share a single checkout,
+  so two sessions in the same directory are always on the same branch, and
+  `git switch` in one moves the other. When someone else's uncommitted work
+  is in the tree, work from `git worktree add ../vn-<feature> -b <feature>`
+  instead of switching.
 - **Check `fly releases`** if prod doesn't match what you expect — someone
   else may have deployed since you last looked.
 
