@@ -1,0 +1,39 @@
+# Staging: a second Fly app for exercising branch work that can only be
+# tried on a server (an ops script, a tracker link, a document import).
+# Deploy any branch here by hand; production only ever comes from main via
+# the GitHub Action.
+#
+#   fly deploy --config fly.staging.toml
+#
+# One-time setup (an admin does this once, never the Action):
+#   fly apps create virtual-navigator-staging
+#   fly volumes create vn_data_staging --app virtual-navigator-staging --region ewr --size 1
+#   fly secrets set AISSTREAM_KEY=... --app virtual-navigator-staging   # optional
+app = "virtual-navigator-staging"
+primary_region = "ewr"
+
+[env]
+  VN_DB = "/data/vn.sqlite"
+  VN_ENABLE_TICKER = "1"
+
+[mounts]
+  source = "vn_data_staging"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "60s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

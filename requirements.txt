@@ -1,4 +1,8 @@
-flask>=3.0
-anthropic>=1.0     # AI reading of NoR/SI documents (optional at runtime)
-pypdf>=5.0         # PDF text extraction for the offline fallback parser
-websocket-client>=1.8  # aisstream.io feed for AIS-tracked real fleets
+# Exact pins: every build installs the same thing. Bump deliberately, run
+# the tests, deploy. (Transitive packages resolve from these.)
+flask==3.1.3
+gunicorn==26.2.0        # production server (Dockerfile CMD)
+anthropic==1.2.0        # AI reading of NoR/SI documents (optional at runtime)
+pydantic==2.13.5        # structured-output schema for the document extractor
+pypdf==6.16.2           # PDF text extraction for the offline fallback parser
+websocket-client==1.9.2 # aisstream.io feed for AIS-tracked real fleets
