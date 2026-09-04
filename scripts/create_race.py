@@ -21,6 +21,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from vn.db import get_db
 from vn.polar import Polar
+from vn.sim import race_settings
 
 
 def main():
@@ -39,6 +40,7 @@ def main():
         d["start_time"].replace("Z", "+00:00")).timestamp())
     marks = d["marks"]
     assert len(marks) >= 2, "need at least start and finish marks"
+    s = race_settings(d)                         # raises on an out-of-range value
 
     db = get_db()
     if db.execute("SELECT 1 FROM races WHERE name=?", (d["name"],)).fetchone():
@@ -51,12 +53,9 @@ def main():
         "maneuver_penalty_s,currents_enabled,grounding_depth_ft) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (d["name"], d.get("description", ""), start,
-         float(d.get("perf_factor", 0.9)), int(d.get("step_minutes", 10)),
-         float(d.get("mark_radius_nm", 2.0)), d.get("polar_name", "race polar"),
-         polar_text, admin_key, int(time.time()),
-         float(d.get("maneuver_penalty_s", 120)),
-         1 if d.get("currents_enabled", True) else 0,
-         float(d.get("grounding_depth_ft", 15))))
+         s["perf_factor"], s["step_minutes"], s["mark_radius_nm"],
+         d.get("polar_name", "race polar"), polar_text, admin_key, int(time.time()),
+         s["maneuver_penalty_s"], s["currents_enabled"], s["grounding_depth_ft"]))
     race_id = cur.lastrowid
     for i, m in enumerate(marks):
         side = m.get("side") or None

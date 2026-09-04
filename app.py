@@ -25,7 +25,7 @@ from vn.polar import Polar
 from vn.realfleet import ingest_points, recompute
 from vn.geo import bearing_deg, haversine_nm
 from vn.sim import (SimBusy, catch_up_race, dtf_nm, enforce_course, get_marks, mark_side,
-                    race_bbox, race_polar, race_zones, sim_lock)
+                    race_bbox, race_polar, race_settings, race_zones, sim_lock)
 from vn.wind import heal_fallback, wind_health
 
 app = Flask(__name__, static_folder="public", static_url_path="")
@@ -291,6 +291,10 @@ def create_race():
                       "side": side})
     if len(marks) < 2:
         return _err("at least two marks (start and finish) are required")
+    try:
+        s = race_settings(d)
+    except ValueError as e:
+        return _err(f"invalid race definition: {e}")
     admin_key = secrets.token_hex(12)
     cur = db.execute(
         "INSERT INTO races(name,description,start_time,perf_factor,step_minutes,"
@@ -298,12 +302,9 @@ def create_race():
         "maneuver_penalty_s,currents_enabled,grounding_depth_ft) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (name, d.get("description", ""), start,
-         float(d.get("perf_factor", 0.9)), int(d.get("step_minutes", 10)),
-         float(d.get("mark_radius_nm", 2.0)),
+         s["perf_factor"], s["step_minutes"], s["mark_radius_nm"],
          d.get("polar_name", "race polar"), polar_text, admin_key, int(time.time()),
-         float(d.get("maneuver_penalty_s", 120)),
-         1 if d.get("currents_enabled", True) else 0,
-         float(d.get("grounding_depth_ft", 15))))
+         s["maneuver_penalty_s"], s["currents_enabled"], s["grounding_depth_ft"]))
     db.execute("UPDATE races SET created_by=? WHERE id=?", (u["id"], cur.lastrowid))
     race_id = cur.lastrowid
     for i, m in enumerate(marks):
@@ -577,6 +578,11 @@ def race_from_docs():
     desc_bits.append(f"Auto-created from race documents ({ex['extractor']}).")
 
     now = int(time.time())
+    try:
+        s = race_settings({"perf_factor": request.form.get("perf_factor"),
+                           "maneuver_penalty_s": request.form.get("maneuver_penalty_s")})
+    except ValueError as e:
+        return _err(f"invalid race settings: {e}")
     admin_key = secrets.token_hex(12)
     cur = db.execute(
         "INSERT INTO races(name,description,start_time,perf_factor,step_minutes,"
@@ -584,9 +590,9 @@ def race_from_docs():
         "maneuver_penalty_s,currents_enabled,grounding_depth_ft) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         ((ex["name"] or "Imported race")[:90], " — ".join(desc_bits), start,
-         float(request.form.get("perf_factor", 0.9)), 10, 2.0,
+         s["perf_factor"], s["step_minutes"], s["mark_radius_nm"],
          polar_name or "race polar", polar_text, admin_key, now,
-         float(request.form.get("maneuver_penalty_s", 120)), 1, 15.0))
+         s["maneuver_penalty_s"], s["currents_enabled"], s["grounding_depth_ft"]))
     race_id = cur.lastrowid
     db.execute("UPDATE races SET created_by=? WHERE id=?", (u["id"], race_id))
     for i, m in enumerate(ex["marks"][:50]):

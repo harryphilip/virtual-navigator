@@ -222,3 +222,19 @@ def test_bad_waypoint_shapes_are_rejected_before_the_boat_starts(client, db):
     assert nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[1.0]]}).status_code == 400
     # nothing was written: the boat has not started
     assert db.execute("SELECT sim_time FROM boats WHERE id=?", (boat,)).fetchone()["sim_time"] is None
+
+
+def test_race_settings_are_range_checked(client):
+    admin = new_client("admin")
+    for bad in ({"step_minutes": 0}, {"step_minutes": -10}, {"step_minutes": "ten"},
+                {"mark_radius_nm": 0}, {"perf_factor": 0}, {"perf_factor": 5},
+                {"maneuver_penalty_s": -1}, {"grounding_depth_ft": 1000}):
+        r = admin.post("/api/races", json=race_body(**bad))
+        assert r.status_code == 400, bad
+        assert list(bad)[0] in r.get_json()["error"]
+    r = admin.post("/api/races", json=race_body(step_minutes="15", perf_factor="0.85",
+                                                currents_enabled="false"))
+    assert r.status_code == 200
+    race = client.get(f"/api/races/{r.get_json()['id']}").get_json()
+    assert race["step_minutes"] == 15 and race["perf_factor"] == 0.85
+    assert race["currents_enabled"] is False
