@@ -221,6 +221,11 @@ Rules that follow from that:
 - **Verify against the live site, not the local file.** An edit that only
   exists on disk is not live. `curl` the deployed page (or open it) and
   confirm the change is actually there before calling it done.
+- **One worktree per concurrent session.** Branches share a single checkout,
+  so two sessions in the same directory are always on the same branch, and
+  `git switch` in one moves the other. When someone else's uncommitted work
+  is in the tree, work from `git worktree add ../vn-<feature> -b <feature>`
+  instead of switching.
 - **Check `fly releases`** if prod doesn't match what you expect — someone
   else may have deployed since you last looked.
 
