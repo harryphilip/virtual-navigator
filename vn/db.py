@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS races (
   maneuver_penalty_s REAL DEFAULT 120,  -- time lost per tack/gybe
   currents_enabled INTEGER DEFAULT 1,
   yb_slug TEXT DEFAULT '',              -- linked YB tracker race, if any
+  ais INTEGER DEFAULT 0,                -- follow the real fleet over AIS (vn/ais.py)
   grounding_depth_ft REAL DEFAULT 15,   -- shallower than this: 50% speed
   created_by INTEGER,                   -- users.id of the creating admin
   zones_json TEXT DEFAULT '[]'          -- exclusion zones [{name, pts:[[lat,lon],..]}]
@@ -93,6 +94,8 @@ CREATE TABLE IF NOT EXISTS real_boats (
   name TEXT NOT NULL,
   klass TEXT DEFAULT '',                -- e.g. same-polar class label
   yb_id INTEGER,                        -- team id on the YB tracker, if linked
+  mmsi INTEGER,                         -- AIS identity, if known (bound by name or set_mmsi.py)
+  sail_no TEXT,
   last_t INTEGER, last_lat REAL, last_lon REAL,
   sog REAL,
   next_mark INTEGER DEFAULT 1,
@@ -164,6 +167,9 @@ MIGRATIONS = [
     "ALTER TABLE races ADD COLUMN zones_json TEXT DEFAULT '[]'",
     "ALTER TABLE boats ADD COLUMN zone_steps INTEGER DEFAULT 0",
     "ALTER TABLE marks ADD COLUMN side TEXT",
+    "ALTER TABLE races ADD COLUMN ais INTEGER DEFAULT 0",
+    "ALTER TABLE real_boats ADD COLUMN mmsi INTEGER",
+    "ALTER TABLE real_boats ADD COLUMN sail_no TEXT",
 ]
 
 

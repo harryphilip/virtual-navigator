@@ -106,6 +106,15 @@ through real historical wind. Demo boats use PIN `0000`.
   positions every 10 minutes. Mark roundings, finishes and SOG are derived
   from the real tracks. (Verified against the Rolex Fastnet 2025 feed —
   the decoder speaks YB's binary AllPositions3/LatestPositions3 format.)
+- **Live AIS link.** Races that run on AIS transponders instead of a
+  tracker (the Vineyard Race) get their fleet from the event's scratch
+  sheet (`scripts/link_ais.py` with a roster CSV such as
+  `data/races/vineyard_2026_roster.csv`). With an `AISSTREAM_KEY` secret the
+  server holds one aisstream.io websocket over the course area, binds each
+  roster boat to the first sailing vessel broadcasting its name there, and
+  folds positions in one a minute per boat. Sponsor suffixes and youth tags
+  are ignored when matching; `scripts/set_mmsi.py` fixes a wrong or missing
+  match, and every binding is written to the race log.
 
 ## Accounts & roles
 
@@ -158,6 +167,7 @@ Plain text formats throughout, so any routing software works:
 | Your routing → the game | GPX route/track, or CSV with lat/lon columns (decimal or `41 27.5 N` style) | anything that exports GPX/CSV |
 | Your sailed track → your software | GPX track download per boat | anything that imports GPX |
 | Real fleet → the game | GPX track or CSV `time,lat,lon` per boat (admin import) | YB/Yellowbrick viewer exports, expedition logs, AIS dumps |
+| Real fleet → the game, live | YB Tracking race (`scripts/link_yb.py`) or AIS via aisstream.io (`scripts/link_ais.py` + a scratch-sheet roster CSV, `AISSTREAM_KEY` secret) | races with a yb.tl page; races that require AIS transponders instead |
 
 ## API sketch
 
