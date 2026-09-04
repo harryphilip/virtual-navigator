@@ -1,9 +1,9 @@
 {
   "name": "RORC Transatlantic Race 2027 — Virtual",
-  "description": "Virtual edition of the 13th RORC Transatlantic Race: 2,995 nm from Marina Lanzarote to Antigua. Start 12:00 UTC Sun 10 Jan 2027 (real start time to be confirmed in the Notice of Race — the virtual start will match). Two marks only: how far south you dive for the trades before turning west is entirely up to you. Polar: 40 ft racer-cruiser at 90%; everyone sails the same numbers.",
+  "description": "Virtual edition of the 13th RORC Transatlantic Race: 2,995 nm from Marina Lanzarote to Antigua. Start 12:00 UTC Sun 10 Jan 2027 (real start time to be confirmed in the Notice of Race — the virtual start will match). Two marks only: how far south you dive for the trades before turning west is entirely up to you. Polar: Class40 (meltemus.com) at 90%; everyone sails the same numbers.",
   "start_time": "2027-01-10T12:00:00Z",
-  "polar_name": "40 ft racer-cruiser",
-  "polar_file": "../polar_40ft.pol",
+  "polar_name": "Class40 (meltemus.com)",
+  "polar_file": "../polar_class40.pol",
   "perf_factor": 0.9,
   "step_minutes": 10,
   "mark_radius_nm": 3.0,
@@ -11,7 +11,15 @@
   "currents_enabled": true,
   "grounding_depth_ft": 15,
   "marks": [
-    {"name": "Start — off Arrecife, Lanzarote", "lat": 28.95, "lon": -13.45},
-    {"name": "Finish — English Harbour, Antigua", "lat": 17.00, "lon": -61.74}
+    {
+      "name": "Start — off Arrecife, Lanzarote",
+      "lat": 28.95,
+      "lon": -13.45
+    },
+    {
+      "name": "Finish — English Harbour, Antigua",
+      "lat": 17.0,
+      "lon": -61.74
+    }
   ]
 }

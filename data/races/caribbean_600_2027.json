@@ -1,9 +1,9 @@
 {
   "name": "RORC Caribbean 600 2027 — Virtual",
-  "description": "Virtual edition of the 18th RORC Caribbean 600: ~600 nm non-stop around 11 Caribbean islands, starting and finishing in Antigua. Start 15:00 UTC (11:00 local) Mon 22 Feb 2027 (exact gun to be confirmed in the Notice of Race — the virtual start will match). Course: north round Barbuda, southwest to Nevis, up past Saba, St Barths and Tintamarre off St Martin, then the long leg south round the Saintes below Guadeloupe, La Désirade, Barbuda again, Redonda, and home. Marks sit just offshore of each rounding. Polar: 40 ft racer-cruiser at 90%; everyone sails the same numbers.",
+  "description": "Virtual edition of the 18th RORC Caribbean 600: ~600 nm non-stop around 11 Caribbean islands, starting and finishing in Antigua. Start 15:00 UTC (11:00 local) Mon 22 Feb 2027 (exact gun to be confirmed in the Notice of Race — the virtual start will match). Course: north round Barbuda, southwest to Nevis, up past Saba, St Barths and Tintamarre off St Martin, then the long leg south round the Saintes below Guadeloupe, La Désirade, Barbuda again, Redonda, and home. Marks sit just offshore of each rounding. Polar: Class40 (meltemus.com) at 90%; everyone sails the same numbers.",
   "start_time": "2027-02-22T15:00:00Z",
-  "polar_name": "40 ft racer-cruiser",
-  "polar_file": "../polar_40ft.pol",
+  "polar_name": "Class40 (meltemus.com)",
+  "polar_file": "../polar_class40.pol",
   "perf_factor": 0.9,
   "step_minutes": 10,
   "mark_radius_nm": 2.0,
@@ -11,16 +11,60 @@
   "currents_enabled": true,
   "grounding_depth_ft": 15,
   "marks": [
-    {"name": "Start — Fort Charlotte, Antigua", "lat": 17.00, "lon": -61.79},
-    {"name": "Barbuda N", "lat": 17.78, "lon": -61.80},
-    {"name": "Nevis S", "lat": 17.06, "lon": -62.65},
-    {"name": "Saba W", "lat": 17.63, "lon": -63.32},
-    {"name": "St Barths N", "lat": 17.97, "lon": -62.83},
-    {"name": "Tintamarre — St Martin", "lat": 18.15, "lon": -62.97},
-    {"name": "Les Saintes — S Guadeloupe", "lat": 15.80, "lon": -61.62},
-    {"name": "La Désirade E", "lat": 16.33, "lon": -60.98},
-    {"name": "Barbuda N (second pass)", "lat": 17.78, "lon": -61.80},
-    {"name": "Redonda", "lat": 16.92, "lon": -62.36},
-    {"name": "Finish — English Harbour, Antigua", "lat": 17.00, "lon": -61.74}
+    {
+      "name": "Start — Fort Charlotte, Antigua",
+      "lat": 17.0,
+      "lon": -61.79
+    },
+    {
+      "name": "Barbuda N",
+      "lat": 17.78,
+      "lon": -61.8
+    },
+    {
+      "name": "Nevis S",
+      "lat": 17.06,
+      "lon": -62.65
+    },
+    {
+      "name": "Saba W",
+      "lat": 17.63,
+      "lon": -63.32
+    },
+    {
+      "name": "St Barths N",
+      "lat": 17.97,
+      "lon": -62.83
+    },
+    {
+      "name": "Tintamarre — St Martin",
+      "lat": 18.15,
+      "lon": -62.97
+    },
+    {
+      "name": "Les Saintes — S Guadeloupe",
+      "lat": 15.8,
+      "lon": -61.62
+    },
+    {
+      "name": "La Désirade E",
+      "lat": 16.33,
+      "lon": -60.98
+    },
+    {
+      "name": "Barbuda N (second pass)",
+      "lat": 17.78,
+      "lon": -61.8
+    },
+    {
+      "name": "Redonda",
+      "lat": 16.92,
+      "lon": -62.36
+    },
+    {
+      "name": "Finish — English Harbour, Antigua",
+      "lat": 17.0,
+      "lon": -61.74
+    }
   ]
 }

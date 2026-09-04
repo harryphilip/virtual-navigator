@@ -1,9 +1,9 @@
 {
   "name": "Rolex Middle Sea Race 2026 — Virtual",
-  "description": "Virtual edition of the 47th Rolex Middle Sea Race: 606 nm anticlockwise around Sicily from Valletta's Grand Harbour and back. Start 09:00 UTC (11:00 local) Sat 17 Oct 2026 with the real fleet. Course: up the east coast of Sicily, through the Strait of Messina, round Stromboli, along the north coast past Capo San Vito to Favignana, then south past Pantelleria and Lampedusa and home to Malta. Marks are set just offshore of each rounding — how wide you go is your call. Polar: 40 ft racer-cruiser at 90%; everyone sails the same numbers.",
+  "description": "Virtual edition of the 47th Rolex Middle Sea Race: 606 nm anticlockwise around Sicily from Valletta's Grand Harbour and back. Start 09:00 UTC (11:00 local) Sat 17 Oct 2026 with the real fleet. Course: up the east coast of Sicily, through the Strait of Messina, round Stromboli, along the north coast past Capo San Vito to Favignana, then south past Pantelleria and Lampedusa and home to Malta. Marks are set just offshore of each rounding — how wide you go is your call. Polar: Class40 (meltemus.com) at 90%; everyone sails the same numbers.",
   "start_time": "2026-10-17T09:00:00Z",
-  "polar_name": "40 ft racer-cruiser",
-  "polar_file": "../polar_40ft.pol",
+  "polar_name": "Class40 (meltemus.com)",
+  "polar_file": "../polar_class40.pol",
   "perf_factor": 0.9,
   "step_minutes": 10,
   "mark_radius_nm": 2.0,
@@ -11,14 +11,50 @@
   "currents_enabled": true,
   "grounding_depth_ft": 15,
   "marks": [
-    {"name": "Start — Valletta Grand Harbour", "lat": 35.905, "lon": 14.55},
-    {"name": "Capo Passero", "lat": 36.63, "lon": 15.22},
-    {"name": "Strait of Messina", "lat": 38.24, "lon": 15.64},
-    {"name": "Stromboli", "lat": 38.84, "lon": 15.15},
-    {"name": "Capo San Vito", "lat": 38.26, "lon": 12.70},
-    {"name": "Favignana", "lat": 37.92, "lon": 12.22},
-    {"name": "Pantelleria", "lat": 36.83, "lon": 11.88},
-    {"name": "Lampedusa", "lat": 35.45, "lon": 12.60},
-    {"name": "Finish — Malta", "lat": 35.91, "lon": 14.54}
+    {
+      "name": "Start — Valletta Grand Harbour",
+      "lat": 35.905,
+      "lon": 14.55
+    },
+    {
+      "name": "Capo Passero",
+      "lat": 36.63,
+      "lon": 15.22
+    },
+    {
+      "name": "Strait of Messina",
+      "lat": 38.24,
+      "lon": 15.64
+    },
+    {
+      "name": "Stromboli",
+      "lat": 38.84,
+      "lon": 15.15
+    },
+    {
+      "name": "Capo San Vito",
+      "lat": 38.26,
+      "lon": 12.7
+    },
+    {
+      "name": "Favignana",
+      "lat": 37.92,
+      "lon": 12.22
+    },
+    {
+      "name": "Pantelleria",
+      "lat": 36.83,
+      "lon": 11.88
+    },
+    {
+      "name": "Lampedusa",
+      "lat": 35.45,
+      "lon": 12.6
+    },
+    {
+      "name": "Finish — Malta",
+      "lat": 35.91,
+      "lon": 14.54
+    }
   ]
 }

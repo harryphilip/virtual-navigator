@@ -1,9 +1,9 @@
 {
   "name": "Rolex Sydney Hobart 2026 — Virtual",
-  "description": "Virtual edition of the Rolex Sydney Hobart Yacht Race: 628 nm from Sydney Harbour down the NSW coast, across Bass Strait to Tasman Island and up the Derwent to Hobart. Start 02:00 UTC (13:00 AEDT) Sat 26 Dec 2026 with the real fleet. The virtual start line is set just outside the Heads. East Australian Current and Bass Strait weather do the sorting; hug the rhumb line or chase the current offshore. Polar: 40 ft racer-cruiser at 90%; everyone sails the same numbers.",
+  "description": "Virtual edition of the Rolex Sydney Hobart Yacht Race: 628 nm from Sydney Harbour down the NSW coast, across Bass Strait to Tasman Island and up the Derwent to Hobart. Start 02:00 UTC (13:00 AEDT) Sat 26 Dec 2026 with the real fleet. The virtual start line is set just outside the Heads. East Australian Current and Bass Strait weather do the sorting; hug the rhumb line or chase the current offshore. Polar: Class40 (meltemus.com) at 90%; everyone sails the same numbers.",
   "start_time": "2026-12-26T02:00:00Z",
-  "polar_name": "40 ft racer-cruiser",
-  "polar_file": "../polar_40ft.pol",
+  "polar_name": "Class40 (meltemus.com)",
+  "polar_file": "../polar_class40.pol",
   "perf_factor": 0.9,
   "step_minutes": 10,
   "mark_radius_nm": 2.0,
@@ -11,10 +11,30 @@
   "currents_enabled": true,
   "grounding_depth_ft": 15,
   "marks": [
-    {"name": "Start — off Sydney Heads", "lat": -33.85, "lon": 151.35},
-    {"name": "Tasman Island", "lat": -43.28, "lon": 148.05},
-    {"name": "Cape Raoul clearance", "lat": -43.31, "lon": 147.75},
-    {"name": "Iron Pot — Derwent entrance", "lat": -43.03, "lon": 147.40},
-    {"name": "Finish — Hobart, River Derwent", "lat": -42.92, "lon": 147.37}
+    {
+      "name": "Start — off Sydney Heads",
+      "lat": -33.85,
+      "lon": 151.35
+    },
+    {
+      "name": "Tasman Island",
+      "lat": -43.28,
+      "lon": 148.05
+    },
+    {
+      "name": "Cape Raoul clearance",
+      "lat": -43.31,
+      "lon": 147.75
+    },
+    {
+      "name": "Iron Pot — Derwent entrance",
+      "lat": -43.03,
+      "lon": 147.4
+    },
+    {
+      "name": "Finish — Hobart, River Derwent",
+      "lat": -42.92,
+      "lon": 147.37
+    }
   ]
 }
