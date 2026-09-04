@@ -246,6 +246,19 @@ Rules that follow from that:
 Races run continuously and the sim advances every minute, so a bad deploy
 is sailed through and cannot be rewound. That is the reason for the care.
 
+## Tests
+
+```bash
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
+`tests/` covers the polar, the geometry, the route and track parsers, course
+reconciliation, the engine (sailed through mocked wind on a temporary
+database) and the HTTP permission matrix. No test touches the network. Run
+them before every merge; a case marked `xfail` documents a known defect that
+is fixed on its own branch.
+
 ## Design notes & simplifications
 
 - A background ticker advances every race in its active window (start − 72 h

@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 data/vn.sqlite*
 .DS_Store
+tests/*.sqlite*
+.pytest_cache/
