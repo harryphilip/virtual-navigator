@@ -300,3 +300,10 @@ is fixed on its own branch.
   factor stands in for real-world degradation.
 - Storage is SQLite (`data/vn.sqlite`), server is Flask; suitable for a club
   fleet, not the Vendée Globe's player count.
+
+## License
+
+MIT; see `LICENSE`. Leaflet (`public/vendor/leaflet/`) is BSD-2-Clause. Wind
+and current data are Open-Meteo (CC BY 4.0); chart tiles are OpenStreetMap
+and NOAA; polars are from meltemus.com; real-boat positions come from YB
+Tracking and aisstream.io for comparison only.
