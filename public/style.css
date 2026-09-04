@@ -49,8 +49,6 @@ header.site .right {
   font-size: 12.5px; text-align: right; white-space: nowrap;
 }
 
-  table.list th, table.list td { padding: 7px 6px; }
-}
 
 .wrap { max-width: 1080px; margin: 0 auto; padding: 26px 22px 70px; }
 
@@ -281,3 +279,5 @@ pre { padding: 10px 12px; overflow-x: auto; }
   button { padding: 10px 16px; }          /* a thumb-sized target */
   .lb-scroll { max-height: none; }         /* one scroll: the page's */
   table.list { font-size: 13px; }
+  table.list th, table.list td { padding: 7px 6px; }
+}
