@@ -47,7 +47,7 @@ def main():
     db.commit()
     print(f"{r['name']}: {len(zones)} zone(s) stored")
     for z in zones:
-        print(f"  ⛔ {z['name']} ({len(z['pts'])} vertices)")
+        print(f"  {z['name']} ({len(z['pts'])} vertices)")
 
 
 if __name__ == "__main__":

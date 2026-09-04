@@ -184,12 +184,12 @@ def smart_join(start, wps, zones, margin_nm=6.0, search_nm=900.0,
     notes = []
     if k:
         notes.append(
-            f"joined the routing {cum[k]:.0f} nm along at "
+            f"Joined the route {cum[k]:.0f} nm along at "
             f"{wps[k][0]:.2f},{wps[k][1]:.2f} — {cands[0][0] - cost:.0f} nm "
             "shorter than picking it up at the head and detouring")
     for zname, cut, ins in touched:
-        notes.append("⛔ routing still brushes a zone — check the map"
+        notes.append("The route still brushes a zone; check the chart"
                      if zname == "!unresolved" else
-                     f"⛔ {zname}: {cut} waypoint(s) detoured via "
-                     f"{ins} boundary point(s)")
+                     f"{zname}: {cut} waypoint{'s' if cut != 1 else ''} detoured via "
+                     f"{ins} boundary point{'s' if ins != 1 else ''}")
     return out, notes

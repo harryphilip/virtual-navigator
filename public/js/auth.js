@@ -9,6 +9,13 @@ async function vnMe(force) {
   }
   return _me;
 }
+const VN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/* one time format everywhere: "04 Sep 13:00Z" */
+function vnTime(t, withYear) {
+  const d = new Date(t * 1000), p = n => String(n).padStart(2, '0');
+  return `${p(d.getUTCDate())} ${VN_MONTHS[d.getUTCMonth()]}${withYear ? ' ' + d.getUTCFullYear() : ''} ` +
+    `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}Z`;
+}
 function vnEsc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
 
 async function vnHeader() {
@@ -21,9 +28,9 @@ async function vnHeader() {
   const u = await vnMe();
   if (u) {
     slot.innerHTML = `${base ? base + ' · ' : ''}` +
-      `<a href="/user?u=${encodeURIComponent(u.username)}">⛵ ${vnEsc(u.display_name)}</a>` +
+      `<a href="/user?u=${encodeURIComponent(u.username)}">${vnEsc(u.display_name)}</a>` +
       (u.is_admin ? ' <span class="badge real">admin</span>' : '') +
-      ` · <a href="#" id="vn_logout">sign out</a>`;
+      ` · <a href="#" id="vn_logout">Sign out</a>`;
     document.getElementById('vn_logout').onclick = async (ev) => {
       ev.preventDefault();
       await fetch('/api/auth/logout', { method: 'POST' });
@@ -31,7 +38,7 @@ async function vnHeader() {
     };
   } else {
     slot.innerHTML = `${base ? base + ' · ' : ''}` +
-      `<a href="/#account">sign in</a>`;
+      `<a href="/#account">Sign in</a>`;
   }
 }
 vnHeader();

@@ -164,7 +164,7 @@ class AISFeed(threading.Thread):
                 add_race_log(db, race["id"],
                              f"AIS: '{rb['name']}' identified as MMSI {mmsi} "
                              f"(broadcast name '{ship_name.strip()}'). Wrong boat? "
-                             "scripts/set_mmsi.py fixes it.")
+                             "Tell the committee.")
                 db.commit()
                 ro["by_mmsi"][mmsi] = rb["id"]
                 ro["unbound"].remove(rb)

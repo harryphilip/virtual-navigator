@@ -54,10 +54,10 @@ def main():
         wps, touched = route_around_zones([start] + wps, zones)
         wps = wps[1:]                     # the line itself stays the anchor
         for zname, cut, ins in touched:
-            notes.append("⛔ routing still brushes a zone — check the map"
+            notes.append("The route still brushes a zone; check the chart"
                          if zname == "!unresolved" else
-                         f"⛔ {zname}: {cut} waypoint(s) detoured via "
-                         f"{ins} boundary point(s)")
+                         f"{zname}: {cut} waypoint{'s' if cut != 1 else ''} detoured via "
+                         f"{ins} boundary point{'s' if ins != 1 else ''}")
     db.execute("DELETE FROM route_wps WHERE boat_id=?", (b["id"],))
     db.executemany("INSERT INTO route_wps(boat_id,seq,lat,lon) VALUES (?,?,?,?)",
                    [(b["id"], i, la, lo) for i, (la, lo) in enumerate(wps)])
@@ -68,7 +68,8 @@ def main():
     add_race_log(db, race_id,
                  f"{name} restarted from the line and replayed from the gun "
                  "through recorded weather."
-                 + ("".join(" " + n for n in notes) if notes else ""))
+                 + ("".join(" " + n[0].upper() + n[1:].rstrip(".") + "." for n in notes)
+                    if notes else ""))
     db.commit()
     print(f"{name}: restarted on the line at {start[0]:.4f},{start[1]:.4f}, "
           f"{len(wps)} waypoint(s) re-armed — replay begins next tick")

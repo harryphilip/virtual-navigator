@@ -60,9 +60,9 @@ def main():
     print(f"{name}: {len(wps)} waypoint(s), route {before:.0f} -> {after:.0f} nm "
           f"({after - before:+.0f})")
     for zname, cut, ins in touched:
-        print("  ⛔ routing still brushes a zone — check the map"
+        print("  routing still brushes a zone — check the chart"
               if zname == "!unresolved" else
-              f"  ⛔ {zname}: {cut} waypoint(s) inside replaced with "
+              f"  {zname}: {cut} waypoint(s) inside replaced with "
               f"{ins} boundary point(s)")
     print("now run restart_boat.py to replay from the gun on the clean route")
 

@@ -431,17 +431,17 @@ def enforce_course(wps, marks, next_mark, radius_nm, start_pos=None, cog=None):
             k += 1
         if k > 0:
             wps = wps[k:]
-            notes.append(f"joined the new routing at its closest point to "
-                         f"your position — dropped {k} already-passed "
-                         "waypoint(s) behind you")
+            notes.append(f"Joined your route at the closest point to the boat; "
+                         f"dropped {k} waypoint{'s' if k != 1 else ''} already "
+                         "behind you")
         dropped = 0
         while wps and haversine_nm(start_pos[0], start_pos[1],
                                    wps[0][0], wps[0][1]) <= radius_nm:
             wps.pop(0)
             dropped += 1
         if dropped and not k:
-            notes.append(f"skipped {dropped} leading waypoint(s) already at "
-                         "your position")
+            notes.append(f"Skipped {dropped} leading waypoint"
+                         f"{'s' if dropped != 1 else ''} already at your position")
     off_nm = max(0.1, min(1.0, 0.5 * radius_nm))   # rounding distance off a sided mark
     pos = 0
     for k, mk in enumerate(marks[next_mark:], start=next_mark):
@@ -461,18 +461,16 @@ def enforce_course(wps, marks, next_mark, radius_nm, start_pos=None, cog=None):
             if side and best_i is not None and best_i + 1 < len(wps):
                 arc = _rounding_arc(mk, wps[best_i], wps[best_i + 1], side, off_nm)
                 wps[insert_at:insert_at] = arc
-                notes.append(f"routing misses {mk['name']} by {best_d:.1f} nm "
-                             f"— a rounding leaving it to {SIDE_WORD[side]} "
-                             "was inserted")
+                notes.append(f"Route misses {mk['name']} by {best_d:.1f} nm; "
+                             f"a rounding leaving it to {SIDE_WORD[side]} was inserted")
                 pos = insert_at + len(arc)
                 continue
             wps.insert(insert_at, (mk["lat"], mk["lon"]))
             if best_d < float("inf"):
-                notes.append(f"routing misses {mk['name']} by {best_d:.1f} nm "
-                             "— a rounding waypoint was inserted")
+                notes.append(f"Route misses {mk['name']} by {best_d:.1f} nm; "
+                             "a rounding waypoint was inserted")
             else:
-                notes.append(f"routing does not reach {mk['name']} — it was "
-                             "appended to your route")
+                notes.append(f"Route does not reach {mk['name']}; it was appended")
             pos = insert_at + 1
             continue
         pos = first_in + 1
@@ -512,8 +510,8 @@ def enforce_course(wps, marks, next_mark, radius_nm, start_pos=None, cog=None):
             continue
         arc = _rounding_arc(mk, a, b, side, off_nm)
         wps[first_in:last_in + 1] = arc
-        notes.append(f"routing does not leave {mk['name']} to {SIDE_WORD[side]} "
-                     "— that pass was rebuilt as a rounding on the correct side")
+        notes.append(f"Route passes {mk['name']} on the wrong side; rebuilt as "
+                     f"a rounding leaving it to {SIDE_WORD[side]}")
         pos = first_in + len(arc)
     return wps, notes
 

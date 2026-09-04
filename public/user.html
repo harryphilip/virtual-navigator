@@ -12,7 +12,7 @@
 <body>
 <header class="site">
   <div class="logo"><a href="/" style="color:inherit"><svg viewBox="0 0 56 44" aria-hidden="true"><line x1="5" y1="2" x2="5" y2="42" stroke="currentColor" stroke-width="3"></line><path d="M8 4 L52 22 L8 40 Z" fill="#c8102e"></path><path d="M12 27 C 18 18, 24 18, 29 23 C 33 27, 37 26, 41 21" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path></svg><span>Virtual Navigator</span></a></div>
-  <div class="sub" id="p_title">navigator profile</div>
+  <div class="sub" id="p_title">Navigator</div>
   <div class="right"></div>
 </header>
 
@@ -26,8 +26,8 @@
   <div class="card">
     <h2>Races &amp; results</h2>
     <div class="table-scroll"><table class="list" id="p_boats">
-      <thead><tr><th>Race</th><th>Boat</th><th>Status</th><th>DTF&nbsp;nm</th>
-        <th>Tacks</th><th>Aground</th><th>Routings</th></tr></thead>
+      <thead><tr><th>Race</th><th>Boat</th><th>Status</th><th>To finish (nm)</th>
+        <th>Tacks &amp; gybes</th><th>Steps aground</th><th>Routes</th></tr></thead>
       <tbody></tbody>
     </table></div>
     <div class="muted small" id="p_none" style="display:none;margin-top:8px">
@@ -36,7 +36,7 @@
   </div>
 
   <div class="card">
-    <h2>Routing history</h2>
+    <h2>Route history</h2>
     <p class="small muted" style="margin:2px 0 8px">Every submission is
     timestamped when it arrives. Waypoints stay private; the log is
     public.</p>
@@ -62,22 +62,25 @@
 <script>
 const uname = new URLSearchParams(location.search).get('u') || '';
 function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
-const when = t => new Date(t * 1000).toISOString().slice(0, 16).replace('T', ' ');
 
 (async function init() {
   const res = await fetch('/api/users/' + encodeURIComponent(uname));
   const j = await res.json();
   if (!res.ok) {
-    document.getElementById('p_name').textContent = j.error || 'error';
+    document.title = 'No such navigator · Virtual Navigator';
+    document.getElementById('p_name').textContent = 'Navigator';
+    document.getElementById('p_meta').innerHTML =
+      `No navigator called <b>${esc(uname)}</b>. <a href="/">Race board</a>.`;
+    document.querySelectorAll('.card').forEach((c, i) => { if (i > 0) c.style.display = 'none'; });
     return;
   }
   const u = j.user;
-  document.title = u.display_name + ' — Virtual Navigator';
-  document.getElementById('p_name').innerHTML = '⛵ ' + esc(u.display_name) +
-    (u.is_admin ? ' <span class="badge real">admin</span>'
-                : ' <span class="badge virtual">navigator</span>');
+  document.title = u.display_name + ' · Virtual Navigator';
+  document.getElementById('p_name').innerHTML = esc(u.display_name) +
+    (j.viewer_is_admin && u.is_admin ? ' <span class="badge real">admin</span>' : '');
+  const joined = new Date(j.joined * 1000);
   document.getElementById('p_meta').textContent =
-    `@${u.username} · aboard since ${when(j.joined).slice(0, 10)} · ` +
+    `@${u.username} · aboard since ${VN_MONTHS[joined.getUTCMonth()]} ${joined.getUTCFullYear()} · ` +
     `${j.boats.length} race${j.boats.length === 1 ? '' : 's'}`;
 
   if (j.viewer_is_admin && !j.is_self) {
@@ -99,7 +102,7 @@ const when = t => new Date(t * 1000).toISOString().slice(0, 16).replace('T', ' '
   const subsDiv = document.getElementById('p_subs');
   for (const b of j.boats) {
     const status = b.finished_at
-      ? `<span class="badge fin">finished ${when(b.finished_at)}</span>`
+      ? `<span class="badge fin">finished ${vnTime(b.finished_at)}</span>`
       : b.started ? '<span class="badge virtual">racing</span>'
                   : '<span class="badge">not started</span>';
     const tr = document.createElement('tr');
@@ -107,16 +110,16 @@ const when = t => new Date(t * 1000).toISOString().slice(0, 16).replace('T', ' '
       <td>${esc(b.boat_name)}</td><td>${status}</td>
       <td>${b.finished_at ? '0' : b.dtf == null ? '—' : Math.round(b.dtf)}</td>
       <td>${b.maneuvers}</td>
-      <td>${b.groundings ? '⚠ ' + b.groundings : '—'}</td>
+      <td>${b.groundings || '—'}</td>
       <td>${b.submissions.length}</td>`;
     tb.appendChild(tr);
     if (b.submissions.length) {
       subsDiv.innerHTML += `<h3 style="color:var(--accent);font-size:13px;margin:10px 0 4px">` +
         `${esc(b.boat_name)} — ${esc(b.race_name)}</h3>` +
-        b.submissions.map(s => `<div>· ${when(s.at)}z — routing with ${s.n} waypoints</div>`).join('');
+        b.submissions.map(s => `<div>${vnTime(s.at)} · ${s.n} waypoints</div>`).join('');
     }
   }
-  if (!subsDiv.innerHTML) subsDiv.innerHTML = '<span class="muted">no routings submitted yet</span>';
+  if (!subsDiv.innerHTML) subsDiv.innerHTML = '<span class="muted">No routes submitted yet.</span>';
 })();
 </script>
 </body>

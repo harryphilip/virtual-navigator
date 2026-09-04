@@ -76,7 +76,7 @@ def main():
                  f"(peak in 20 kn TWS {old20:.1f} → {peak20:.1f} kn). "
                  "The old numbers were not this class's; boats sail the new "
                  "ones from here."
-                 + (f" {sailing} boat(s) already sailing keep the track they "
+                 + (f" {sailing} boat{'s' if sailing != 1 else ''} already sailing keep the track they "
                     "made under the old polar unless restarted."
                     if sailing else ""))
     db.commit()

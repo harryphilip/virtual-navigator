@@ -66,7 +66,7 @@ def main():
                    "WHERE id=?", (repl[0], repl[1], race_id))
     add_race_log(db, race_id,
                  f"Start rescheduled {old:%d %b %H:%M}Z → {when:%d %b %H:%M}Z; "
-                 f"{moored} waiting boat(s) re-anchored to the new gun."
+                 f"{moored} waiting boat{'s' if moored != 1 else ''} re-anchored to the new gun."
                  + (" Race description updated to match." if repl else ""))
     db.commit()
     print(f"{r['name']}: start {old:%Y-%m-%d %H:%M}Z -> {when:%Y-%m-%d %H:%M}Z"
