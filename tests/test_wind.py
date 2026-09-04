@@ -1,5 +1,6 @@
 """Weather cache: placeholder fill on failure, cooldown gating, healing,
 and per-race health. The HTTP layer is replaced; nothing touches the net."""
+import re
 import time
 
 import pytest
@@ -35,6 +36,31 @@ def current_series(kmh=3.704, deg=90.0, hours=range(-24, 48)):
 def count(db, table, source):
     return db.execute(f"SELECT COUNT(*) c FROM {table} WHERE source=?",
                       (source,)).fetchone()["c"]
+
+
+def test_old_hours_widen_the_request_into_the_archive(db, monkeypatch):
+    urls = []
+    old = int(time.time()) - 20 * 86400
+    monkeypatch.setattr(wind, "_http_json",
+                        lambda url, **kw: urls.append(url) or wind_series(hours=range(-22 * 24, 48)))
+    twd, tws, src = get_wind(db, 41.0, -71.0, old)
+    assert src == "open-meteo"
+    assert int(re.search(r"past_days=(\d+)", urls[0]).group(1)) in (21, 22)
+    # a live hour still asks for the normal window
+    get_wind(db, 42.0, -71.0, int(time.time()))
+    assert "past_days=7" in urls[1]
+
+
+def test_hours_beyond_the_archive_sail_placeholder_without_hammering(db, monkeypatch):
+    urls = []
+    old = int(time.time()) - 100 * 86400
+    monkeypatch.setattr(wind, "_http_json", lambda url, **kw: urls.append(url) or wind_series())
+    assert get_wind(db, 41.0, -71.0, old)[2] == "synthetic"
+    assert "past_days=92" in urls[0]
+    get_wind(db, 41.0, -71.0, old + 600)
+    get_wind(db, 41.0, -71.0, old + 3600)              # next hour, same cell
+    assert len(urls) == 1                               # cooldown, not a fetch per step
+    assert wind_health(db)["degraded"] is False         # nothing in the live window
 
 
 def test_failed_fetch_fills_a_short_window_only(db, monkeypatch):

@@ -100,7 +100,7 @@ def _advance(db, race, polar, marks, zones, boat, until):
     while t + step <= until and finished is None:
         t2 = t + step
         path = [(lat, lon)]          # every position the boat occupies this step
-        twd, tws, _src = get_wind(db, lat, lon, t)
+        twd, tws, src = get_wind(db, lat, lon, t)
         hours = step / 3600.0
 
         # grounding: in less water than the race minimum the boat drags
@@ -181,13 +181,13 @@ def _advance(db, race, polar, marks, zones, boat, until):
                 finished = t2
                 break
 
-        points.append((boat["id"], t2, lat, lon, twd, tws, bsp, hdg))
+        points.append((boat["id"], t2, lat, lon, twd, tws, bsp, hdg, src))
         t = t2
 
     if points:
         db.executemany(
-            "INSERT OR REPLACE INTO track(boat_id,t,lat,lon,twd,tws,bsp,hdg) "
-            "VALUES (?,?,?,?,?,?,?,?)", points)
+            "INSERT OR REPLACE INTO track(boat_id,t,lat,lon,twd,tws,bsp,hdg,src) "
+            "VALUES (?,?,?,?,?,?,?,?,?)", points)
     if passed_wps:
         db.execute(
             "UPDATE route_wps SET passed=1 WHERE boat_id=? AND seq<=?",

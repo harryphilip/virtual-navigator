@@ -9,8 +9,10 @@ routing, reconciles it against the current course from the start mark
 (the same soft join a mid-race resubmission gets), detours the result
 around any exclusion zones (the join itself can create a crossing leg),
 and re-anchors the boat on the line at the gun.  The next tick replays
-the race so far through the same cached weather — deterministic, nothing
-invented.  Route submission history is kept.
+the race so far through recorded weather: real wind is refetched back to
+92 days (the API's archive limit); anything older sails placeholder wind,
+and every fix on the track records which it was (audit_replay.py reads
+it back).  Route submission history is kept.
 """
 import os
 import sys

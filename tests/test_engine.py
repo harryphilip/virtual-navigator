@@ -23,7 +23,9 @@ def test_boat_sails_to_waypoints_in_order_and_locks_them(db, weather):
     passed = [r["seq"] for r in db.execute(
         "SELECT seq FROM route_wps WHERE boat_id=? AND passed=1", (boat,))]
     assert passed == [0, 1]
-    assert len(track_rows(db, boat)) == 12               # one row per 10-min step
+    rows = track_rows(db, boat)
+    assert len(rows) == 12                               # one row per 10-min step
+    assert {r[7] for r in rows} == {"test"}              # wind source is on the track
 
 
 def test_boat_with_no_route_parks(db, weather):

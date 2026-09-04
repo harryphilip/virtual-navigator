@@ -55,7 +55,10 @@ def _note_failure(kind, clat, clon):
 
 API = ("https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
        "&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn"
-       "&past_days=7&forecast_days=7&timeformat=unixtime")
+       "&past_days={past}&forecast_days=7&timeformat=unixtime")
+PAST_DAYS = 7          # the normal series window behind now
+ARCHIVE_DAYS = 92      # the most the API will reach back: replays older than
+                       # this sail placeholder wind, recorded as such
 
 
 def _cell(lat, lon):
@@ -74,7 +77,7 @@ def get_wind(db, lat, lon, t_unix):
         stale = any(r["source"] == "synthetic" for r in have.values())
         missing = hour not in have or (hour + 3600) not in have
         if (missing or stale) and _fetch_allowed("wind", clat, clon, stale):
-            _fetch_cell(db, clat, clon)
+            _fetch_cell(db, clat, clon, for_hour=hour)
             rows = db.execute(
                 "SELECT t, twd, tws, source FROM wind_cache WHERE lat=? AND lon=? "
                 "AND t IN (?, ?)", (clat, clon, hour, hour + 3600)).fetchall()
@@ -104,9 +107,9 @@ def _http_json(url, attempts=3, timeout=15):
             time.sleep(1 + 2 * i)
 
 
-def _download_wind(clat, clon, attempts=3):
+def _download_wind(clat, clon, attempts=3, past_days=PAST_DAYS):
     """The hourly series for one grid cell from the API, as cache rows."""
-    data = _http_json(API.format(lat=clat, lon=clon), attempts=attempts)
+    data = _http_json(API.format(lat=clat, lon=clon, past=past_days), attempts=attempts)
     hh = data["hourly"]
     rows = []
     for t, spd, deg in zip(hh["time"], hh["wind_speed_10m"], hh["wind_direction_10m"]):
@@ -129,13 +132,15 @@ def _store_wind(db, clat, clon, rows):
     _failed.pop(("wind", clat, clon), None)
 
 
-def _store_placeholder_wind(db, clat, clon):
-    """Synthetic wind for a short window around now, so the boat keeps
-    sailing while the API is down. Never overwrites real rows."""
-    now = int(time.time())
+def _store_placeholder_wind(db, clat, clon, hours=None):
+    """Synthetic wind for the given hours (default: a short window around
+    now), so the boat keeps sailing while real data is unavailable. Never
+    overwrites real rows."""
+    if hours is None:
+        now = int(time.time())
+        hours = [(now // 3600 + h) * 3600 for h in range(*FAIL_FILL_HOURS)]
     rows = []
-    for h in range(*FAIL_FILL_HOURS):
-        t = (now // 3600 + h) * 3600
+    for t in hours:
         twd, tws = _synthetic(clat, clon, t)
         rows.append((clat, clon, t, twd, tws, "synthetic"))
     db.executemany(
@@ -144,16 +149,28 @@ def _store_placeholder_wind(db, clat, clon):
     db.commit()
 
 
-def _fetch_cell(db, clat, clon):
-    """Fetch one grid cell into the cache; on failure fill a short window
-    with placeholder wind and leave the cell for the cooldown retry."""
+def _fetch_cell(db, clat, clon, for_hour=None):
+    """Fetch one grid cell into the cache. An hour older than the normal
+    series window (a replay, a restart, a postponed gun) widens the request
+    back to the API's archive limit. On failure a short window is filled
+    with placeholder wind and the cell is left for the cooldown retry; an
+    hour the archive cannot reach gets placeholder rows too, gated the
+    same way, so a replay never hammers the API step after step."""
+    past_days = PAST_DAYS
+    if for_hour is not None:
+        back = int(math.ceil((time.time() - for_hour) / 86400.0)) + 1
+        past_days = max(PAST_DAYS, min(ARCHIVE_DAYS, back))
     try:
-        rows = _download_wind(clat, clon)
+        rows = _download_wind(clat, clon, past_days=past_days)
     except Exception:
         _note_failure("wind", clat, clon)
         _store_placeholder_wind(db, clat, clon)
         return False
     _store_wind(db, clat, clon, rows)
+    if for_hour is not None and not any(r[2] == for_hour for r in rows):
+        _note_failure("wind", clat, clon)
+        _store_placeholder_wind(db, clat, clon, hours=[for_hour, for_hour + 3600])
+        return False
     return True
 
 
