@@ -28,7 +28,7 @@
       <h2 style="display:flex;align-items:center;gap:8px">Leaderboard
         <span class="muted small" id="lb_meta" style="font-weight:400"></span></h2>
       <div class="lb-filters" id="lb_filters"></div>
-      <div class="lb-scroll">
+      <div class="lb-scroll table-scroll">
         <table class="list" id="lb">
           <thead><tr><th>#</th><th>Boat</th><th></th><th>DTF&nbsp;nm</th><th>kn</th></tr></thead>
           <tbody></tbody>
@@ -51,10 +51,10 @@
         speed is removed, so where each boat went and when. Click a
         leaderboard row to pick a boat.</p>
       <div class="row">
-        <div><label>Real boat</label><select id="cmp_real"></select></div>
-        <div><label>Virtual boat</label><select id="cmp_virtual"></select></div>
+        <div><label for="cmp_real">Real boat</label><select id="cmp_real"></select></div>
+        <div><label for="cmp_virtual">Virtual boat</label><select id="cmp_virtual"></select></div>
       </div>
-      <div id="cmp_out" class="small" style="margin-top:12px"></div>
+      <div id="cmp_out" class="small table-scroll" style="margin-top:12px"></div>
     </div>
 
     <div class="card" id="docs_card" style="display:none">
@@ -65,27 +65,49 @@
     <div class="card" id="myboat">
       <h2>My boat</h2>
       <div id="mb_signin" style="display:none">
-        <p class="small muted" style="margin:2px 0 8px">Sign in (or register) to race.</p>
-        <div class="row">
-          <div><label>Username</label><input id="mb_user"></div>
-          <div><label>Password</label><input id="mb_pass" type="password"></div>
-        </div>
-        <div class="row" style="margin-top:8px">
-          <button id="mb_auth_login">Sign in</button>
-          <button class="ghost" id="mb_auth_reg">Register</button>
-        </div>
-        <div class="msg" id="mb_msg"></div>
+        <p class="small muted" style="margin:2px 0 8px">Sign in to enter this race.</p>
+        <form id="mb_form_login" autocomplete="on" novalidate>
+          <div class="row">
+            <div><label for="mb_user">Username</label>
+              <input id="mb_user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+            <div><label for="mb_pass">Password</label>
+              <input id="mb_pass" name="password" type="password" autocomplete="current-password" required></div>
+          </div>
+          <div class="row actions">
+            <button type="submit">Sign in</button>
+            <button type="button" class="ghost" id="mb_show_reg">Create an account</button>
+          </div>
+        </form>
+        <form id="mb_form_reg" autocomplete="on" novalidate hidden>
+          <div class="row">
+            <div><label for="mb_ruser">Username</label>
+              <input id="mb_ruser" name="username" autocomplete="username" autocapitalize="none" spellcheck="false"
+                     required minlength="3" maxlength="30" pattern="[A-Za-z0-9][A-Za-z0-9_\-]{2,29}"></div>
+            <div><label for="mb_rdisp">Display name</label>
+              <input id="mb_rdisp" name="display_name" autocomplete="nickname" maxlength="60"></div>
+            <div><label for="mb_rpass">Password</label>
+              <input id="mb_rpass" name="password" type="password" autocomplete="new-password" required minlength="6"></div>
+          </div>
+          <div class="row actions">
+            <button type="submit">Create account</button>
+            <button type="button" class="ghost" id="mb_show_login">I have an account</button>
+          </div>
+          <p class="small muted" style="margin:6px 0 0">Passwords cannot be reset: no email is kept, so write it down.</p>
+        </form>
+        <div class="msg" id="mb_msg" aria-live="polite"></div>
       </div>
       <div id="mb_register" style="display:none">
-        <label>Boat name</label><input id="mb_name">
-        <div style="margin-top:10px"><button id="mb_reg_go">Enter this race</button></div>
-        <div class="msg" id="mb_msg1"></div>
+        <form id="mb_form_enter" novalidate>
+          <label for="mb_name">Boat name</label><input id="mb_name" name="boat" required maxlength="40" autocomplete="off">
+          <div class="row actions"><button type="submit" id="mb_reg_go">Enter this race</button></div>
+        </form>
+        <div class="msg" id="mb_msg1" aria-live="polite"></div>
         <p class="small"><a href="#" id="mb_claim_toggle">Claim a pre-account boat (old PIN)</a></p>
-        <div id="mb_claim" style="display:none" class="row">
-          <div><label>Boat ID</label><input id="mb_claim_id"></div>
-          <div><label>PIN</label><input id="mb_claim_pin" type="password"></div>
-          <div style="align-self:end"><button class="ghost" id="mb_claim_go">Claim</button></div>
-        </div>
+        <form id="mb_claim" style="display:none" class="row" novalidate>
+          <div><label for="mb_claim_id">Boat ID</label><input id="mb_claim_id" inputmode="numeric"></div>
+          <div><label for="mb_claim_pin">PIN</label><input id="mb_claim_pin" type="password" autocomplete="off"></div>
+          <div style="align-self:end"><button type="submit" class="ghost" id="mb_claim_go">Claim</button></div>
+        </form>
       </div>
 
       <div id="mb_manage" style="display:none">
@@ -684,24 +706,49 @@ async function refreshMine() {
     : '';
 }
 
-async function authAction(path) {
+function mbShowAuth(which) {
+  document.getElementById('mb_form_login').hidden = which !== 'login';
+  document.getElementById('mb_form_reg').hidden = which !== 'reg';
+  document.getElementById(which === 'login' ? 'mb_user' : 'mb_ruser').focus();
+}
+async function authAction(ev, path, ids) {
+  ev.preventDefault();
   const msg = document.getElementById('mb_msg');
+  const form = ev.target;
+  if (!form.checkValidity()) {
+    msg.className = 'msg err';
+    const bad = form.querySelector(':invalid');
+    msg.textContent = bad && bad.id.endsWith('pass') ? 'Password must be at least 6 characters.'
+      : bad && bad.id.endsWith('user') ? 'Username: 3 to 30 characters, letters, digits, dash or underscore.'
+      : 'Please fill in the form.';
+    bad && bad.focus();
+    return;
+  }
+  msg.className = 'msg'; msg.textContent = '…';
   try {
     await api(path, { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: document.getElementById('mb_user').value,
-                            password: document.getElementById('mb_pass').value }) });
+      body: JSON.stringify({ username: document.getElementById(ids.user).value,
+                            password: document.getElementById(ids.pass).value,
+                            display_name: ids.disp ? document.getElementById(ids.disp).value : '' }) });
+    msg.textContent = '';
     await vnMe(true); vnHeader();
     await showManage(); refreshMine().catch(() => {});
   } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
 }
-document.getElementById('mb_auth_login').onclick = () => authAction('/api/auth/login');
-document.getElementById('mb_auth_reg').onclick = () => authAction('/api/auth/register');
+document.getElementById('mb_form_login').onsubmit = ev =>
+  authAction(ev, '/api/auth/login', { user: 'mb_user', pass: 'mb_pass' });
+document.getElementById('mb_form_reg').onsubmit = ev =>
+  authAction(ev, '/api/auth/register', { user: 'mb_ruser', pass: 'mb_rpass', disp: 'mb_rdisp' });
+document.getElementById('mb_show_reg').onclick = () => mbShowAuth('reg');
+document.getElementById('mb_show_login').onclick = () => mbShowAuth('login');
 
-document.getElementById('mb_reg_go').onclick = async () => {
+document.getElementById('mb_form_enter').onsubmit = async (ev) => {
+  ev.preventDefault();
   const msg = document.getElementById('mb_msg1');
   try {
     const name = document.getElementById('mb_name').value.trim();
+    if (!name) throw new Error('Give the boat a name.');
     const j = await api(`/api/races/${raceId}/boats`, { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }) });
@@ -712,8 +759,10 @@ document.getElementById('mb_reg_go').onclick = async () => {
 document.getElementById('mb_claim_toggle').onclick = (ev) => {
   ev.preventDefault();
   document.getElementById('mb_claim').style.display = 'flex';
+  document.getElementById('mb_claim_id').focus();
 };
-document.getElementById('mb_claim_go').onclick = async () => {
+document.getElementById('mb_claim').onsubmit = async (ev) => {
+  ev.preventDefault();
   const msg = document.getElementById('mb_msg1');
   try {
     const j = await api(`/api/boats/${+document.getElementById('mb_claim_id').value}/claim`,
