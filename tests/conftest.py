@@ -125,6 +125,7 @@ def client(db, weather):
     """A Flask test client on the fresh database, weather mocked."""
     import app as appmod
     appmod.app.config["TESTING"] = True
+    appmod._buckets.clear()                     # rate-limit windows start fresh
     return appmod.app.test_client()
 
 

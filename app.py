@@ -29,7 +29,7 @@ from vn.sim import (SimBusy, catch_up_race, dtf_nm, enforce_course, get_marks, m
 from vn.wind import heal_fallback, wind_health
 
 app = Flask(__name__, static_folder="public", static_url_path="")
-app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)   # Fly's TLS proxy
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)   # Fly's TLS proxy
 
 TRACK_MAX_POINTS = 400
 SESSION_COOKIE = "vn_session"
@@ -76,6 +76,51 @@ def _user_json(u):
 
 def _err(msg, code=400):
     return jsonify({"error": msg}), code
+
+
+# ---------- rate limiting ----------------------------------------------------
+# A small sliding window per (kind, key), in memory: one worker, so one dict.
+# Logins cost a PBKDF2 hash each, four-digit PINs invite guessing, and a
+# routing upload is real engine work; none of them should be free to loop.
+
+RATE_LIMITS = {                 # kind: (attempts, seconds)
+    "login": (5, 60),
+    "register": (10, 3600),
+    "claim": (5, 60),
+    "route": (10, 3600),        # per boat
+    "docs": (5, 3600),
+}
+_buckets = {}
+_bucket_lock = threading.Lock()
+
+
+def _client_ip():
+    return request.headers.get("Fly-Client-IP") or request.remote_addr or "?"
+
+
+def _rate_limited(kind, key=None):
+    """Seconds the caller must wait, or 0 if this attempt is allowed."""
+    limit, window = RATE_LIMITS[kind]
+    k = (kind, key if key is not None else _client_ip())
+    now = time.time()
+    with _bucket_lock:
+        hits = [t for t in _buckets.get(k, ()) if now - t < window]
+        if len(hits) >= limit:
+            _buckets[k] = hits
+            return int(window - (now - hits[0])) + 1
+        hits.append(now)
+        _buckets[k] = hits
+        if len(_buckets) > 20000:          # forgetful, not leaky
+            for stale in [kk for kk, v in _buckets.items() if now - v[-1] > 3600][:10000]:
+                del _buckets[stale]
+    return 0
+
+
+def _too_many(wait):
+    resp = jsonify({"error": f"too many attempts; try again in {wait} s"})
+    resp.status_code = 429
+    resp.headers["Retry-After"] = str(wait)
+    return resp
 
 
 def _parse_time(s):
@@ -130,6 +175,9 @@ def user_page():
 
 @app.post("/api/auth/register")
 def auth_register():
+    wait = _rate_limited("register")
+    if wait:
+        return _too_many(wait)
     db = get_db()
     d = request.get_json(force=True)
     username = (d.get("username") or "").strip().lower()
@@ -156,6 +204,9 @@ def auth_register():
 
 @app.post("/api/auth/login")
 def auth_login():
+    wait = _rate_limited("login")
+    if wait:
+        return _too_many(wait)
     db = get_db()
     d = request.get_json(force=True)
     u = db.execute("SELECT * FROM users WHERE username=?",
@@ -527,6 +578,9 @@ def race_from_docs():
     Returns 422 with the partial extraction when the course could not be
     determined, so the client can prefill the manual form instead.
     """
+    wait = _rate_limited("docs")
+    if wait:
+        return _too_many(wait)
     db = get_db()
     u = current_user(db)
     if not (u and u["is_admin"]):
@@ -692,6 +746,9 @@ def my_boats(race_id):
 @app.post("/api/boats/<int:boat_id>/claim")
 def claim_boat(boat_id):
     """One-time adoption of a pre-account boat using its old PIN."""
+    wait = _rate_limited("claim")
+    if wait:
+        return _too_many(wait)
     db = get_db()
     u = current_user(db)
     if not u:
@@ -737,6 +794,9 @@ def submit_route(boat_id):
     b, err = _auth_boat(db, boat_id)
     if err:
         return err
+    wait = _rate_limited("route", boat_id)
+    if wait:
+        return _too_many(wait)
     race = _race_or_404(db, b["race_id"])
     now = int(time.time())
 
@@ -812,6 +872,11 @@ def submit_route(boat_id):
                            [(boat_id, base + i, lat, lon) for i, (lat, lon) in enumerate(wps)])
             db.execute("INSERT INTO route_log(boat_id,submitted_at,wp_json) VALUES (?,?,?)",
                        (boat_id, now, json.dumps(wps)))
+            # the audit trail keeps the last fifty submissions per boat; a
+            # 10,000-waypoint routing posted in a loop must not grow the file
+            db.execute("DELETE FROM route_log WHERE boat_id=? AND id NOT IN "
+                       "(SELECT id FROM route_log WHERE boat_id=? ORDER BY id DESC LIMIT 50)",
+                       (boat_id, boat_id))
             db.commit()
     except SimBusy as e:
         return _err(str(e), 503)
