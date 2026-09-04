@@ -23,7 +23,7 @@ from vn.nor import extract_race, MAX_DOC_BYTES
 from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to_gpx
 from vn.polar import Polar
 from vn.realfleet import ingest_points, recompute
-from vn.sim import (catch_up_race, dtf_nm, enforce_course, get_marks,
+from vn.sim import (catch_up_race, dtf_nm, enforce_course, get_marks, mark_side,
                     race_polar, race_zones)
 from vn.wind import wind_health
 
@@ -273,7 +273,12 @@ def create_race():
             return _err(f"mark {i + 1} ({m.get('name', '?')}): could not read "
                         f"position {m.get('lat')!r}, {m.get('lon')!r} — use "
                         "decimal degrees or degrees-minutes like 41° 27.5' N")
-        marks.append({"name": m.get("name", f"Mark {i}"), "lat": lat, "lon": lon})
+        side = m.get("side") or None
+        if side not in (None, "port", "stbd"):
+            return _err(f"mark {i + 1} ({m.get('name', '?')}): side must be "
+                        "'port', 'stbd' or left out")
+        marks.append({"name": m.get("name", f"Mark {i}"), "lat": lat, "lon": lon,
+                      "side": side})
     if len(marks) < 2:
         return _err("at least two marks (start and finish) are required")
     admin_key = secrets.token_hex(12)
@@ -292,8 +297,8 @@ def create_race():
     db.execute("UPDATE races SET created_by=? WHERE id=?", (u["id"], cur.lastrowid))
     race_id = cur.lastrowid
     for i, m in enumerate(marks):
-        db.execute("INSERT INTO marks(race_id,seq,name,lat,lon) VALUES (?,?,?,?,?)",
-                   (race_id, i, m["name"], m["lat"], m["lon"]))
+        db.execute("INSERT INTO marks(race_id,seq,name,lat,lon,side) VALUES (?,?,?,?,?,?)",
+                   (race_id, i, m["name"], m["lat"], m["lon"], m["side"]))
     db.commit()
     return jsonify({"id": race_id,
                     "polar_tws": polar.tws, "polar_twa": polar.twa})
@@ -305,7 +310,8 @@ def race_detail(race_id):
     r = _race_or_404(db, race_id)
     if not r:
         return _err("race not found", 404)
-    marks = [{"seq": m["seq"], "name": m["name"], "lat": m["lat"], "lon": m["lon"]}
+    marks = [{"seq": m["seq"], "name": m["name"], "lat": m["lat"], "lon": m["lon"],
+              "side": mark_side(m)}
              for m in get_marks(db, race_id)]
     return jsonify({"id": r["id"], "name": r["name"], "description": r["description"],
                     "start_time": r["start_time"], "perf_factor": r["perf_factor"],

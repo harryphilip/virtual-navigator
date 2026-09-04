@@ -9,6 +9,7 @@ is advanced lazily to "now", written to an immutable track, and route updates
 can only replace waypoints not yet reached.
 """
 import json
+import math
 import threading
 import time
 
@@ -175,6 +176,81 @@ def _advance(db, race, polar, marks, zones, boat, until):
          zone_steps, boat["id"]))
 
 
+MARK_SIDES = ("port", "stbd")
+SIDE_WORD = {"port": "port", "stbd": "starboard"}
+
+
+def mark_side(mk):
+    """'port' | 'stbd' | None — the side a boat must leave the mark on."""
+    try:
+        side = mk["side"]
+    except (KeyError, IndexError):
+        return None
+    return side if side in MARK_SIDES else None
+
+
+def _signed_turn(a, b):
+    """Signed change from bearing a to bearing b, in (-180, 180]."""
+    return ((b - a + 180.0) % 360.0) - 180.0
+
+
+def _seg_dist_nm(mk, a, b):
+    """Closest approach of the straight leg a→b to the mark, in nm (flat earth)."""
+    k = math.cos(math.radians(mk["lat"])) * 60.0
+    ax, ay = (a[1] - mk["lon"]) * k, (a[0] - mk["lat"]) * 60.0
+    bx, by = (b[1] - mk["lon"]) * k, (b[0] - mk["lat"]) * 60.0
+    dx, dy = bx - ax, by - ay
+    l2 = dx * dx + dy * dy
+    t = 0.0 if l2 == 0 else max(0.0, min(1.0, -(ax * dx + ay * dy) / l2))
+    return math.hypot(ax + t * dx, ay + t * dy)
+
+
+def _required_sweep(mk, a, b, side):
+    """Taut-string sweep from a round the mark to b in the required direction.
+
+    Returns (bearing of a from the mark, sweep in degrees, +1/-1 direction).
+    Legs that come in and go out within 90° of each other make a turning
+    mark: there the side means a full rounding, not a touch-and-go past it.
+    """
+    ba = bearing_deg(mk["lat"], mk["lon"], a[0], a[1])
+    bb = bearing_deg(mk["lat"], mk["lon"], b[0], b[1])
+    sgn = 1.0 if side == "stbd" else -1.0
+    sweep = (sgn * (bb - ba)) % 360.0
+    if sweep < 90.0:
+        sweep += 360.0
+    return ba, sweep, sgn
+
+
+def _rounding_arc(mk, a, b, side, off_nm, step_deg=45.0):
+    """Waypoints that take a boat from a round the mark to b, leaving it to `side`.
+
+    Points sit off_nm from the mark, swept from a's bearing to b's bearing —
+    clockwise for starboard, anticlockwise for port — through the sweep the
+    taut-string rule requires (a full circle at a turning mark).
+    """
+    ba, sweep, sgn = _required_sweep(mk, a, b, side)
+    n = max(1, int(math.ceil(sweep / step_deg)))
+    return [destination(mk["lat"], mk["lon"], (ba + sgn * sweep * i / n) % 360.0, off_nm)
+            for i in range(n + 1)]
+
+
+def _leg_sweep(mk, leg):
+    """Net signed bearing sweep (mark → boat) along a leg: + clockwise, − anti.
+
+    A pass-by on the correct side sweeps ~±180°, a rounding ~±360°, and a
+    touch-and-go ~0°; the sign says which side the mark was left on.  Also
+    reports whether any leg runs straight over the mark, where the sign is
+    meaningless.  Compared against _required_sweep with 90° of slack.
+    """
+    total, over = 0.0, False
+    for i in range(len(leg) - 1):
+        total += _signed_turn(bearing_deg(mk["lat"], mk["lon"], leg[i][0], leg[i][1]),
+                              bearing_deg(mk["lat"], mk["lon"], leg[i + 1][0], leg[i + 1][1]))
+        if _seg_dist_nm(mk, leg[i], leg[i + 1]) < 0.05:
+            over = True
+    return total, over
+
+
 def enforce_course(wps, marks, next_mark, radius_nm, start_pos=None, cog=None):
     """Softly reconcile a submitted routing with the race course.
 
@@ -189,7 +265,13 @@ def enforce_course(wps, marks, next_mark, radius_nm, start_pos=None, cog=None):
         never comes within the mark radius of one, inserts the mark itself
         as a waypoint at the routing's closest approach — the boat must
         genuinely sail to every mark, so there is nothing to gain and
-        nothing to be thrown out for.
+        nothing to be thrown out for,
+      * for marks with a required side ('port' / 'stbd'), checks which way
+        the routing actually passes — the net sweep of the mark's bearing
+        along the leg — and where it goes the wrong way, touches and turns
+        back, or runs straight over the mark, replaces that pass with a
+        rounding half a mark-radius off the mark on the correct side.  An
+        inserted rounding for a missed sided mark is built the same way.
 
     Returns (waypoints, notes).
     """
@@ -252,20 +334,30 @@ def enforce_course(wps, marks, next_mark, radius_nm, start_pos=None, cog=None):
         if dropped and not k:
             notes.append(f"skipped {dropped} leading waypoint(s) already at "
                          "your position")
+    off_nm = max(0.1, min(1.0, 0.5 * radius_nm))   # rounding distance off a sided mark
     pos = 0
-    for mk in marks[next_mark:]:
+    for k, mk in enumerate(marks[next_mark:], start=next_mark):
+        side = mark_side(mk)
+        leg_start = pos
         best_i, best_d = None, float("inf")
-        credited = False
+        first_in = None
         for i in range(pos, len(wps)):
             d = haversine_nm(mk["lat"], mk["lon"], wps[i][0], wps[i][1])
             if d < best_d:
                 best_i, best_d = i, d
             if d <= radius_nm:
-                pos = i + 1
-                credited = True
+                first_in = i
                 break
-        if not credited:
+        if first_in is None:
             insert_at = best_i + 1 if best_i is not None else len(wps)
+            if side and best_i is not None and best_i + 1 < len(wps):
+                arc = _rounding_arc(mk, wps[best_i], wps[best_i + 1], side, off_nm)
+                wps[insert_at:insert_at] = arc
+                notes.append(f"routing misses {mk['name']} by {best_d:.1f} nm "
+                             f"— a rounding leaving it to {SIDE_WORD[side]} "
+                             "was inserted")
+                pos = insert_at + len(arc)
+                continue
             wps.insert(insert_at, (mk["lat"], mk["lon"]))
             if best_d < float("inf"):
                 notes.append(f"routing misses {mk['name']} by {best_d:.1f} nm "
@@ -274,6 +366,47 @@ def enforce_course(wps, marks, next_mark, radius_nm, start_pos=None, cog=None):
                 notes.append(f"routing does not reach {mk['name']} — it was "
                              "appended to your route")
             pos = insert_at + 1
+            continue
+        pos = first_in + 1
+        if not side:
+            continue
+        # the run of waypoints inside the mark radius, and the leg's
+        # approach (a) and departure (b) points outside it
+        last_in = first_in
+        while last_in + 1 < len(wps) and haversine_nm(
+                mk["lat"], mk["lon"], wps[last_in + 1][0], wps[last_in + 1][1]) <= radius_nm:
+            last_in += 1
+        if last_in + 1 >= len(wps):
+            continue                       # route ends at the mark: nothing to judge
+        if first_in > 0:
+            a = wps[first_in - 1]
+        elif start_pos is not None:
+            a = tuple(start_pos)
+        else:
+            continue
+        b = wps[last_in + 1]
+        # judge the whole leg: from the previous mark up to where the
+        # routing first reaches the next one
+        end = len(wps)
+        if k + 1 < len(marks):
+            nxt = marks[k + 1]
+            for j in range(last_in + 1, len(wps)):
+                if haversine_nm(nxt["lat"], nxt["lon"], wps[j][0], wps[j][1]) <= radius_nm:
+                    end = j + 1
+                    break
+        leg_from = max(0, min(leg_start, first_in - 1))   # always from the approach point
+        leg = list(wps[leg_from:end])
+        if leg_from == 0 and start_pos is not None:
+            leg.insert(0, tuple(start_pos))
+        sweep, over = _leg_sweep(mk, leg)
+        _, need, sgn = _required_sweep(mk, a, b, side)
+        if sgn * sweep >= need - 90.0 and not over:
+            continue
+        arc = _rounding_arc(mk, a, b, side, off_nm)
+        wps[first_in:last_in + 1] = arc
+        notes.append(f"routing does not leave {mk['name']} to {SIDE_WORD[side]} "
+                     "— that pass was rebuilt as a rounding on the correct side")
+        pos = first_in + len(arc)
     return wps, notes
 
 

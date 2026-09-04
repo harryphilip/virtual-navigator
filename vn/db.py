@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS marks (
   name TEXT NOT NULL,
   lat REAL NOT NULL,
   lon REAL NOT NULL,
+  side TEXT,                            -- 'port' | 'stbd' | NULL: side to leave it on
   PRIMARY KEY (race_id, seq)
 );
 CREATE TABLE IF NOT EXISTS boats (
@@ -162,6 +163,7 @@ MIGRATIONS = [
     "ALTER TABLE real_boats ADD COLUMN finished_at INTEGER",
     "ALTER TABLE races ADD COLUMN zones_json TEXT DEFAULT '[]'",
     "ALTER TABLE boats ADD COLUMN zone_steps INTEGER DEFAULT 0",
+    "ALTER TABLE marks ADD COLUMN side TEXT",
 ]
 
 

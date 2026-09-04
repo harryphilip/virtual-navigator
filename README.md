@@ -56,10 +56,14 @@ through real historical wind. Demo boats use PIN `0000`.
   committee reconciles them: waypoints you're already standing on are
   skipped, and wherever the routing never passes within the mark radius of
   a required mark (start, roundings, finish), the mark itself is inserted
-  into your route at the closest approach. You always sail the real course
-  — there is nothing to gain by cutting a mark and nothing to be
-  disqualified for when your finish line sits half a mile from ours. Every
-  adjustment is reported back when you submit.
+  into your route at the closest approach. Marks that must be left to port
+  or starboard are checked for the side too: the committee looks at which
+  way the mark's bearing sweeps along your leg, and a pass on the wrong side,
+  a touch-and-go at a turning mark, or a leg straight over the mark is
+  rebuilt as a rounding half a mark-radius off on the correct side. You
+  always sail the real course — there is nothing to gain by cutting a mark
+  and nothing to be disqualified for when your finish line sits half a mile
+  from ours. Every adjustment is reported back when you submit.
 - **Currents set the fleet.** Real surface currents (Open-Meteo marine model,
   same 0.25° caching) push every boat — sailing or parked — so a Gulf Stream
   lane or a foul tide gate matters exactly like it does offshore. Optional
@@ -241,7 +245,9 @@ is sailed through and cannot be rewound. That is the reason for the care.
   maneuver penalty.
 - No land avoidance: routes crossing land will happily sail it, so route
   around headlands like you would offshore. Course marks are honoured within
-  `mark_radius_nm`.
+  `mark_radius_nm`; a mark's required side (`"side": "port"|"stbd"` in the
+  race JSON, or `scripts/set_side.py` on a live race) is enforced on the
+  submitted routing, not on the sailed track.
 - Wind + surface current only (no waves or sail inventory limits) — the polar
   factor stands in for real-world degradation.
 - Storage is SQLite (`data/vn.sqlite`), server is Flask; suitable for a club

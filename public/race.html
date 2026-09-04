@@ -267,7 +267,7 @@ function drawCourse() {
     L.circleMarker([m.lat, m.lon], {
       radius: 6, color: col.mark, weight: 2, fillColor: col.mark, fillOpacity: .35,
     }).addTo(courseLayer).bindTooltip(
-      `${i === 0 ? '⚑ ' : i === race.marks.length - 1 ? '🏁 ' : ''}${esc(m.name)}`,
+      `${i === 0 ? '⚑ ' : i === race.marks.length - 1 ? '🏁 ' : ''}${esc(m.name)}${m.side === 'stbd' ? ' — leave to starboard' : m.side === 'port' ? ' — leave to port' : ''}`,
       { className: 'boat-label', permanent: false });
   });
   // exclusion zones — keep out or sail at half speed

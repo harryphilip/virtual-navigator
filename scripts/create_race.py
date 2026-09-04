@@ -5,7 +5,9 @@
 On Fly:  fly ssh console -C "python /app/scripts/create_race.py /app/data/races/<race>.json"
 
 The JSON holds the race settings and marks; the polar comes from an inline
-"polar_text" or a "polar_file" path relative to the JSON file.  Prints the
+"polar_text" or a "polar_file" path relative to the JSON file.  A mark may
+carry "side": "port" or "stbd" — the side boats must leave it on; routings
+that pass it the wrong way are rebuilt into a rounding on submission.  Prints the
 race id.  Refuses to create a second race with the same name.  Race
 management goes through admin accounts (make_admin.py).
 """
@@ -57,8 +59,10 @@ def main():
          float(d.get("grounding_depth_ft", 15))))
     race_id = cur.lastrowid
     for i, m in enumerate(marks):
-        db.execute("INSERT INTO marks(race_id,seq,name,lat,lon) VALUES (?,?,?,?,?)",
-                   (race_id, i, m["name"], float(m["lat"]), float(m["lon"])))
+        side = m.get("side") or None
+        assert side in (None, "port", "stbd"), f"mark {m['name']!r}: side must be port/stbd"
+        db.execute("INSERT INTO marks(race_id,seq,name,lat,lon,side) VALUES (?,?,?,?,?,?)",
+                   (race_id, i, m["name"], float(m["lat"]), float(m["lon"]), side))
     db.commit()
     print(f"race {race_id}: {d['name']}")
     print(f"start: {d['start_time']}  marks: {len(marks)}")
