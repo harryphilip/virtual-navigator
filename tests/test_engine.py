@@ -3,8 +3,8 @@ import pytest
 
 from vn.geo import destination, haversine_nm
 from vn.sim import catch_up_race
-from tests.conftest import (POLAR_CLASS40, boat_row, make_boat, make_race,
-                            set_route, track_rows)
+from tests.conftest import (POLAR_40FT, POLAR_CLASS40, boat_row, make_boat,
+                            make_race, set_route, track_rows)
 
 H = 3600
 # a north–south line: waypoints "south" are dead downwind of 15 kn northerlies
@@ -141,30 +141,50 @@ def test_finished_boat_is_never_advanced_again(db, weather):
     assert track_rows(db, boat) == rows
 
 
-@pytest.mark.xfail(strict=True, reason="review finding C-1: fixed on the mark-passage branch")
-def test_every_mark_is_honoured_at_class40_speed(db, weather):
+@pytest.mark.parametrize("polar,tws,step_nm,abeam_nm", [
+    (POLAR_CLASS40, 25.0, 2.615, 1.8),      # Class40 broad-reaching: 2.6 nm a step
+    (POLAR_40FT, 12.0, 1.21, 1.95),         # a cruiser-racer at 7 kn
+], ids=["class40", "40ft"])
+def test_every_mark_is_honoured_when_passed_abeam(db, weather, polar, tws, step_nm, abeam_nm):
     """A boat must never sail past a mark unrecorded (review finding C-1).
 
-    The engine only tests mark passage at the end of each step. A routing
-    that passes a mark abeam — inside the radius, as course reconciliation
-    accepts, but 1.8 nm off — crosses the 2 nm circle on a chord only 1.7 nm
-    long. A Class40 broad-reaching in 25 kn covers 2.6 nm a step, so both
-    step ends can fall outside the circle and the pass is never seen.
-    Ten marks along one bearing, spaced so the passes land at different
-    phases of a step.
+    A routing that passes a mark abeam — inside the radius, as course
+    reconciliation accepts, but well off to one side — crosses the 2 nm
+    circle on a chord shorter than one step, so both step ends fall outside
+    it. Passage has to be judged along the path, not at step ends. Ten marks
+    along one bearing, spaced so the passes land at different phases of a
+    step.
     """
-    weather.steady(0.0, 25.0)
+    weather.steady(0.0, tws)
     marks, route = [START], []
     lat, lon = 0.0, 0.0
     for i in range(10):
-        lat, lon = destination(lat, lon, 135.0, 2 * 2.615 + 0.3)
+        lat, lon = destination(lat, lon, 135.0, 2 * step_nm + 0.3)
         marks.append((f"M{i + 1}", lat, lon))
-        route.append(destination(lat, lon, 45.0, 1.8))        # 1.8 nm abeam
+        route.append(destination(lat, lon, 45.0, abeam_nm))
     route.append((lat, lon))                                   # finish itself
-    race = make_race(db, marks, polar_text=POLAR_CLASS40, mark_radius_nm=2.0)
+    race = make_race(db, marks, polar_text=polar, mark_radius_nm=2.0)
     boat = make_boat(db, race, started_at=0)
     set_route(db, boat, route)
     catch_up_race(db, race, now=12 * H)
     b = boat_row(db, boat)
     assert b["next_mark"] == len(marks), "a mark was sailed past without being recorded"
     assert b["finished_at"] is not None
+
+
+def test_marks_are_credited_in_course_order_only(db, weather):
+    """A boat that sails wide of a turning mark still owes it, however close
+    it comes to the finish."""
+    race = make_race(db, [START, ("Turn", -0.3, 0.2), FINISH], mark_radius_nm=2.0)
+    boat = make_boat(db, race, started_at=0)
+    set_route(db, boat, [(-0.5, 0.0)])                  # straight to the finish
+    catch_up_race(db, race, now=12 * H)
+    b = boat_row(db, boat)
+    assert b["next_mark"] == 1 and b["finished_at"] is None
+    # marks stacked on one spot are credited in sequence from a single pass
+    race2 = make_race(db, [START, ("Turn", -0.5, 0.0), FINISH], mark_radius_nm=2.0)
+    boat2 = make_boat(db, race2, started_at=0)
+    set_route(db, boat2, [(-0.5, 0.0)])
+    catch_up_race(db, race2, now=12 * H)
+    b2 = boat_row(db, boat2)
+    assert b2["next_mark"] == 3 and b2["finished_at"] is not None
