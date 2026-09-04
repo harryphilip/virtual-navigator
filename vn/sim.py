@@ -86,6 +86,7 @@ def _advance(db, race, polar, marks, zones, boat, until):
 
     while t + step <= until and finished is None:
         t2 = t + step
+        path = [(lat, lon)]          # every position the boat occupies this step
         twd, tws, _src = get_wind(db, lat, lon, t)
         hours = step / 3600.0
 
@@ -140,6 +141,7 @@ def _advance(db, race, polar, marks, zones, boat, until):
                 else:
                     lat, lon = destination(lat, lon, brg, d_step)
                     remaining = 0.0
+                path.append((lat, lon))
         else:
             hdg = twa = None
             bsp = 0.0   # no routing left: boat parks and waits for orders
@@ -149,14 +151,22 @@ def _advance(db, race, polar, marks, zones, boat, until):
             cdir, cspd, _csrc = get_current(db, lat, lon, t)
             if cspd > 0.01:
                 lat, lon = destination(lat, lon, cdir, cspd * hours)
+        path.append((lat, lon))
 
-        # course-mark / finish handling
-        while next_mark < len(marks) and haversine_nm(
-                lat, lon, marks[next_mark]["lat"], marks[next_mark]["lon"]
-        ) <= race["mark_radius_nm"]:
+        # course-mark / finish handling: a mark is passed when the boat's
+        # path this step comes within the mark radius of it — judged along
+        # the whole path, not just where the step ends, because a routing
+        # that passes a mark abeam crosses the radius on a chord that can
+        # be shorter than one step
+        while next_mark < len(marks):
+            i = _path_reaches(marks[next_mark], path, race["mark_radius_nm"])
+            if i is None:
+                break
             next_mark += 1
+            path = path[i:]          # later marks count only from here on
             if next_mark >= len(marks):
                 finished = t2
+                break
 
         points.append((boat["id"], t2, lat, lon, twd, tws, bsp, hdg))
         t = t2
@@ -203,6 +213,17 @@ def _seg_dist_nm(mk, a, b):
     l2 = dx * dx + dy * dy
     t = 0.0 if l2 == 0 else max(0.0, min(1.0, -(ax * dx + ay * dy) / l2))
     return math.hypot(ax + t * dx, ay + t * dy)
+
+
+def _path_reaches(mk, path, radius_nm):
+    """Index of the first segment of `path` that comes within radius_nm of
+    the mark, or None. A one-point path is judged as a point."""
+    if len(path) == 1:
+        return 0 if haversine_nm(path[0][0], path[0][1], mk["lat"], mk["lon"]) <= radius_nm else None
+    for i in range(len(path) - 1):
+        if _seg_dist_nm(mk, path[i], path[i + 1]) <= radius_nm:
+            return i
+    return None
 
 
 def _required_sweep(mk, a, b, side):
