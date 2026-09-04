@@ -199,14 +199,24 @@ same file turn every commit into a hand-separated diff.
 ```bash
 git switch -c real-vs-virtual     # start the work
 # … build and test it …
-git switch main && git merge real-vs-virtual
+git switch main && git merge --no-ff real-vs-virtual
 fly deploy                        # main == what's live
 ```
+
+Because deploy ignores `main`, you can also `fly deploy` straight **from the
+branch** to exercise something you can only run on the server — an ops script
+in `scripts/`, say — and merge once it works. Merging early to get code onto
+the box is never necessary.
 
 Rules that follow from that:
 
 - **One feature per branch**, so an unfinished feature can never be
   deployed by a change that has nothing to do with it.
+- **Branch again after merging.** Deleting the branch leaves you on `main`,
+  and the next quick fix lands there without anyone noticing — which is
+  exactly how stray commits reach `main`. `--no-ff` at least leaves a
+  record; a fast-forward merge makes branch work and direct commits
+  indistinguishable afterwards.
 - **Keep `main` deployable at all times.** `main` should always be safe to
   ship; if it isn't, the next person to deploy anything ships your bug.
 - **Deploy from a clean tree.** Run `git status` before `fly deploy`. If it

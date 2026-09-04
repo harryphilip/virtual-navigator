@@ -19,6 +19,19 @@ work sitting in the tree ships the moment anyone deploys anything else. Two
 features in progress in the same file also mean neither can be committed
 without hand-separating the diff.
 
+That same fact is also the escape hatch: because deploy ignores `main`, you can
+`fly deploy` **from the feature branch** to exercise a change on the server —
+needed for anything you can only run there, like a `scripts/` ops tool. Merge
+after it works, not before. There is never a reason to merge early just to get
+code onto the box.
+
+**Branch again after you merge.** Merging and deleting the branch leaves you
+standing on `main`, so the next quick fix lands directly on it — this is how
+main picks up stray commits in practice, and it is worth a deliberate
+`git switch -c` before the next edit. Merge with `--no-ff`: a fast-forward
+merge leaves no trace, so branch work and direct commits look identical in the
+log afterwards and the mistake is invisible.
+
 ## Before deploying
 
 - `git status` must be clean. If it isn't, stop — you don't know what you are
