@@ -138,9 +138,20 @@ def main():
         print(f"  first {first_kept} submitted waypoint(s) dropped — the routing "
               f"is picked up {skipped:.0f} nm along at "
               f"{sub[first_kept][0]:.2f},{sub[first_kept][1]:.2f}")
-        print(f"  reaching that point cost the boat {head_armed:.0f} nm as armed "
-              f"vs {skipped:.0f} nm as submitted "
-              f"({head_armed - skipped:+.0f} nm)")
+        # Compare like for like.  The armed head starts at the line, so the
+        # honest alternative is sailing to the routing's own first waypoint
+        # and following it from there — not the submitted head alone, which
+        # begins wherever the router was told to start.
+        to_head = haversine_nm(*line, *sub[0]) if marks else 0.0
+        alt = to_head + skipped
+        print(f"  reaching that point cost {head_armed:.0f} nm as armed, vs "
+              f"{alt:.0f} nm sailing to the routing's own head "
+              f"({to_head:.0f} nm) and following it ({skipped:.0f} nm)")
+        delta = head_armed - alt
+        verdict = ("distance-neutral" if abs(delta) < 15 else
+                   "SHORTER than the submitted routing — check this is fair"
+                   if delta < 0 else "longer than the submitted routing")
+        print(f"  => {delta:+.0f} nm — {verdict}")
     inserted = [p for p in armed if not any(_same(p, s) for s in sub)]
     print(f"  points armed that were never submitted: {len(inserted)}")
     for p in inserted[:10]:
