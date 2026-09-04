@@ -78,16 +78,38 @@
   <div class="card" id="account">
     <h2>Account</h2>
     <div id="acct_out">
-      <div class="row">
-        <div><label>Username</label><input id="a_user" autocomplete="username"></div>
-        <div><label>Password</label><input id="a_pass" type="password" autocomplete="current-password"></div>
-        <div><label>Display name (for register)</label><input id="a_disp"></div>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <button id="a_login">Sign in</button>
-        <button class="ghost" id="a_reg">Register as navigator</button>
-      </div>
-      <div class="msg" id="a_msg"></div>
+      <form id="f_login" autocomplete="on" novalidate>
+        <div class="row">
+          <div><label for="a_user">Username</label>
+            <input id="a_user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+          <div><label for="a_pass">Password</label>
+            <input id="a_pass" name="password" type="password" autocomplete="current-password" required></div>
+        </div>
+        <div class="row actions">
+          <button type="submit">Sign in</button>
+          <button type="button" class="ghost" id="a_show_reg">Create an account</button>
+        </div>
+        <div class="msg" id="a_msg" aria-live="polite"></div>
+      </form>
+      <form id="f_reg" autocomplete="on" novalidate hidden>
+        <div class="row">
+          <div><label for="r_user">Username</label>
+            <input id="r_user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false"
+                   required minlength="3" maxlength="30" pattern="[A-Za-z0-9][A-Za-z0-9_\-]{2,29}"></div>
+          <div><label for="r_disp">Display name</label>
+            <input id="r_disp" name="display_name" autocomplete="nickname" maxlength="60"></div>
+          <div><label for="r_pass">Password</label>
+            <input id="r_pass" name="password" type="password" autocomplete="new-password" required minlength="6"></div>
+        </div>
+        <div class="row actions">
+          <button type="submit">Create account</button>
+          <button type="button" class="ghost" id="a_show_login">I have an account</button>
+        </div>
+        <div class="msg" id="r_msg" aria-live="polite"></div>
+        <p class="small muted" style="margin:6px 0 0">3 to 30 characters for the username; letters,
+        digits, dash or underscore. Passwords are at least 6 characters and cannot be reset: no
+        email is kept, so write it down.</p>
+      </form>
       <p class="small muted" style="margin:6px 0 0">Navigators enter races and
       submit routings. Admins also create races. The first account on a new
       server becomes the admin.</p>
@@ -251,22 +273,50 @@ async function initAccount() {
     if (el) el.style.display = isAdmin ? 'block' : 'none';
   }
 }
-async function acctSubmit(path) {
-  const msg = document.getElementById('a_msg');
+function showAuth(which) {
+  document.getElementById('f_login').hidden = which !== 'login';
+  document.getElementById('f_reg').hidden = which !== 'reg';
+  document.getElementById(which === 'login' ? 'a_user' : 'r_user').focus();
+}
+async function acctSubmit(ev, path, ids, msgId) {
+  ev.preventDefault();
+  const msg = document.getElementById(msgId);
+  const form = ev.target;
+  if (!form.checkValidity()) {
+    msg.className = 'msg err';
+    const bad = form.querySelector(':invalid');
+    msg.textContent = bad && bad.id.endsWith('pass') ? 'Password must be at least 6 characters.'
+      : bad && bad.id.endsWith('user') ? 'Username: 3 to 30 characters, letters, digits, dash or underscore.'
+      : 'Please fill in the form.';
+    bad && bad.focus();
+    return;
+  }
+  msg.className = 'msg'; msg.textContent = '…';
   try {
     const res = await fetch(path, { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: document.getElementById('a_user').value,
-        password: document.getElementById('a_pass').value,
-        display_name: document.getElementById('a_disp').value }) });
+      body: JSON.stringify({ username: document.getElementById(ids.user).value,
+        password: document.getElementById(ids.pass).value,
+        display_name: ids.disp ? document.getElementById(ids.disp).value : '' }) });
     const j = await res.json();
     if (!res.ok) throw new Error(j.error || res.statusText);
-    if (j.first_admin) alert('You are the first account on this server, so you are the admin.');
-    location.reload();
+    msg.textContent = '';
+    await vnMe(true);
+    vnHeader();
+    await initAccount();
+    if (j.first_admin) {
+      const box = document.getElementById('acct_in');
+      box.innerHTML += '<div class="msg ok">You are the first account on this server, so you are the admin.</div>';
+    }
   } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
 }
-document.getElementById('a_login').onclick = () => acctSubmit('/api/auth/login');
-document.getElementById('a_reg').onclick = () => acctSubmit('/api/auth/register');
+document.getElementById('f_login').onsubmit = ev =>
+  acctSubmit(ev, '/api/auth/login', { user: 'a_user', pass: 'a_pass' }, 'a_msg');
+document.getElementById('f_reg').onsubmit = ev =>
+  acctSubmit(ev, '/api/auth/register', { user: 'r_user', pass: 'r_pass', disp: 'r_disp' }, 'r_msg');
+document.getElementById('a_show_reg').onclick = () => showAuth('reg');
+document.getElementById('a_show_login').onclick = () => showAuth('login');
+if (location.hash === '#register') showAuth('reg');
 initAccount();
 
 /* ---------------- race board: live map + standings ---------------- */

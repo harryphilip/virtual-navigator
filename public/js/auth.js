@@ -14,9 +14,13 @@ function vnEsc(s) { const d = document.createElement('div'); d.textContent = s ?
 async function vnHeader() {
   const slot = document.querySelector('header.site .right');
   if (!slot) return;
+  // remember what the page put in the slot so a re-render after sign-in
+  // (no reload) starts from the same base, not from the previous render
+  if (slot.dataset.base === undefined) slot.dataset.base = slot.innerHTML;
+  const base = slot.dataset.base;
   const u = await vnMe();
   if (u) {
-    slot.innerHTML = `${slot.innerHTML ? slot.innerHTML + ' · ' : ''}` +
+    slot.innerHTML = `${base ? base + ' · ' : ''}` +
       `<a href="/user?u=${encodeURIComponent(u.username)}">⛵ ${vnEsc(u.display_name)}</a>` +
       (u.is_admin ? ' <span class="badge real">admin</span>' : '') +
       ` · <a href="#" id="vn_logout">sign out</a>`;
@@ -26,7 +30,7 @@ async function vnHeader() {
       location.reload();
     };
   } else {
-    slot.innerHTML = `${slot.innerHTML ? slot.innerHTML + ' · ' : ''}` +
+    slot.innerHTML = `${base ? base + ' · ' : ''}` +
       `<a href="/#account">sign in</a>`;
   }
 }
