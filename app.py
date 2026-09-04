@@ -15,7 +15,7 @@ import traceback
 from flask import Flask, jsonify, request, send_from_directory, Response
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from vn import yb
+from vn import ais, yb
 from vn.compare import CompareError, compare
 from vn.db import add_race_log, get_db
 from vn.forecast import make_snapshot
@@ -321,7 +321,8 @@ def race_detail(race_id):
                     "currents_enabled": bool(r["currents_enabled"]),
                     "grounding_depth_ft": r["grounding_depth_ft"],
                     "zones": race_zones(r),
-                    "yb_slug": r["yb_slug"] or ""})
+                    "yb_slug": r["yb_slug"] or "",
+                    "ais": bool(r["ais"])})
 
 
 @app.get("/api/races/<int:race_id>/polar")
@@ -1221,6 +1222,7 @@ def start_ticker():
 # opt into the ticker via env; run exactly one worker so it starts once
 if os.environ.get("VN_ENABLE_TICKER") == "1":
     start_ticker()
+    ais.start_feed()
 
 
 if __name__ == "__main__":

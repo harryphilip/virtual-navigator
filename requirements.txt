@@ -1,3 +1,4 @@
 flask>=3.0
 anthropic>=1.0     # AI reading of NoR/SI documents (optional at runtime)
 pypdf>=5.0         # PDF text extraction for the offline fallback parser
+websocket-client>=1.8  # aisstream.io feed for AIS-tracked real fleets
