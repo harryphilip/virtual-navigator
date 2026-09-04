@@ -118,11 +118,29 @@ def main():
                 break
     print(f"\n  submitted waypoints still armed, in order: "
           f"{len(kept)}/{len(sub)}")
+    # Does the submission even begin at the line?  A routing exported mid-race
+    # starts from where the boat was that day, so replaying from the gun has
+    # to invent a leg the owner never submitted to reach it.
+    if marks:
+        line = (marks[0]["lat"], marks[0]["lon"])
+        d0 = haversine_nm(sub[0][0], sub[0][1], *line)
+        print(f"\n  submission begins at {sub[0][0]:.2f},{sub[0][1]:.2f} — "
+              f"{d0:.0f} nm from the start line")
+        if d0 > 5:
+            print("    ^ the routing does NOT start at the line, so a replay "
+                  "from the gun must sail a leg nobody submitted to reach it")
     if first_kept:
         skipped = _length(sub[:first_kept + 1])
+        # the line itself is not stored as a waypoint, but the boat sails
+        # from it to the first armed point, so that leg counts
+        lead = haversine_nm(*line, *armed[0]) if (marks and armed) else 0.0
+        head_armed = lead + _length(armed) - _length(sub[first_kept:])
         print(f"  first {first_kept} submitted waypoint(s) dropped — the routing "
               f"is picked up {skipped:.0f} nm along at "
               f"{sub[first_kept][0]:.2f},{sub[first_kept][1]:.2f}")
+        print(f"  reaching that point cost the boat {head_armed:.0f} nm as armed "
+              f"vs {skipped:.0f} nm as submitted "
+              f"({head_armed - skipped:+.0f} nm)")
     inserted = [p for p in armed if not any(_same(p, s) for s in sub)]
     print(f"  points armed that were never submitted: {len(inserted)}")
     for p in inserted[:10]:
