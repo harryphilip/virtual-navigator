@@ -21,6 +21,9 @@ import time
 from .db import add_race_log, get_db
 from .realfleet import ingest_points
 from .sim import get_marks
+import logging
+
+log = logging.getLogger("vn.ais")
 
 URL = "wss://stream.aisstream.io/v0/stream"
 POSITION_TYPES = ("PositionReport", "StandardClassBPositionReport",
@@ -111,7 +114,7 @@ class AISFeed(threading.Thread):
             except Exception as e:
                 # a rejected key closes the socket without a message; a
                 # quiet box times out — either way, back off and reconnect
-                print(f"[ais] {type(e).__name__}: {e} — retry in {backoff}s")
+                log.warning("%s: %s; retry in %ss", type(e).__name__, e, backoff)
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 300)
 
@@ -125,7 +128,7 @@ class AISFeed(threading.Thread):
                "FilterMessageTypes": list(POSITION_TYPES + STATIC_TYPES)}
         ws = websocket.create_connection(URL, timeout=90)
         ws.send(json.dumps(sub))
-        print(f"[ais] subscribed for race(s) {[r['id'] for r in races]}")
+        log.info("subscribed for race(s) %s", [r["id"] for r in races])
         started = time.time()
         n = 0
         try:
@@ -136,7 +139,7 @@ class AISFeed(threading.Thread):
                 n += self._handle(db, msg, races, marks)
         finally:
             ws.close()
-            print(f"[ais] session closed, {n} point(s) stored")
+            log.info("session closed, %d point(s) stored", n)
 
     # ---- roster ----------------------------------------------------------
     def _load_roster(self, db, race_id):
@@ -168,7 +171,7 @@ class AISFeed(threading.Thread):
                 db.commit()
                 ro["by_mmsi"][mmsi] = rb["id"]
                 ro["unbound"].remove(rb)
-                print(f"[ais] race {race['id']}: {rb['name']} = MMSI {mmsi}")
+                log.info("race %s: %s = MMSI %s", race["id"], rb["name"], mmsi)
                 return rb["id"]
         return None
 
@@ -218,7 +221,7 @@ def start_feed():
         return
     key = os.environ.get("AISSTREAM_KEY", "").strip()
     if not key:
-        print("[ais] AISSTREAM_KEY not set — real-fleet AIS tracking is off")
+        log.info("AISSTREAM_KEY not set; real-fleet AIS tracking is off")
         return
     _feed = AISFeed(key)
     _feed.start()
