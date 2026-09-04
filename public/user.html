@@ -10,13 +10,14 @@
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="site">
   <div class="logo"><a href="/" style="color:inherit"><svg viewBox="0 0 56 44" aria-hidden="true"><line x1="5" y1="2" x2="5" y2="42" stroke="currentColor" stroke-width="3"></line><path d="M8 4 L52 22 L8 40 Z" fill="#c8102e"></path><path d="M12 27 C 18 18, 24 18, 29 23 C 33 27, 37 26, 41 21" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path></svg><span>Virtual Navigator</span></a></div>
   <div class="sub" id="p_title">Navigator</div>
   <div class="right"><a href="/how">How it works</a></div>
 </header>
 
-<div class="wrap">
+<main class="wrap" id="main">
   <div class="card">
     <h2 id="p_name">…</h2>
     <div class="small muted" id="p_meta"></div>
@@ -56,7 +57,7 @@
     lasts 90 days. Pages load fonts from Google and map tiles from OpenStreetMap
     and NOAA, which see your IP address.</p>
   </footer>
-</div>
+</main>
 
 <script src="/js/auth.js"></script>
 <script>
@@ -86,7 +87,7 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s ?? 
   if (j.viewer_is_admin && !j.is_self) {
     const box = document.getElementById('p_adminbox');
     box.innerHTML = `<button class="ghost" id="p_mkadmin">` +
-      (u.is_admin ? 'Revoke admin' : 'Make admin') + `</button> <span class="msg" id="p_amsg"></span>`;
+      (u.is_admin ? 'Revoke admin' : 'Make admin') + `</button> <span class="msg" id="p_amsg" aria-live="polite"></span>`;
     document.getElementById('p_mkadmin').onclick = async () => {
       const r = await fetch(`/api/users/${encodeURIComponent(u.username)}/admin`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

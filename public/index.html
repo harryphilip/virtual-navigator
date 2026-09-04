@@ -11,13 +11,14 @@
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="site">
   <div class="logo"><svg viewBox="0 0 56 44" aria-hidden="true"><line x1="5" y1="2" x2="5" y2="42" stroke="currentColor" stroke-width="3"></line><path d="M8 4 L52 22 L8 40 Z" fill="#c8102e"></path><path d="M12 27 C 18 18, 24 18, 29 23 C 33 27, 37 26, 41 21" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path></svg><span>Virtual Navigator</span></div>
   <div class="sub">real races · real weather · real fleet</div>
   <div class="right"><a href="/how">How it works</a></div>
 </header>
 
-<div class="wrap">
+<main class="wrap" id="main">
 
   <div class="hero">
     <div class="hero-text">
@@ -30,7 +31,7 @@
       split into boat speed and navigation, so you know whether they were
       faster or smarter.</p>
       <div class="hero-cta">
-        <a href="#live" id="cta_race"><button>Enter a race</button></a>
+        <a href="#live" id="cta_race" class="btn">Enter a race</a>
         <a href="/how" class="small" id="cta_how">How it works</a>
       </div>
       <div class="small muted" id="cta_note"></div>
@@ -122,14 +123,14 @@
       the race page. Marks are only taken from positions stated in the
       documents, never guessed. Reading prose needs Anthropic credentials on
       the server; without them, a pattern parser reads coordinate tables.</p>
-    <label>Documents (NoR, SIs, course appendix — PDF or .txt, multiple OK)</label>
+    <label for="d_text">Documents (NoR, SIs, course appendix — PDF or .txt, multiple OK)</label>
     <input type="file" id="d_files" multiple accept=".pdf,.txt,.text">
     <label>…or paste the relevant text (course table, start schedule)</label>
     <textarea id="d_text" rows="3" placeholder="Optional if files attached"></textarea>
-    <label>Polar (optional — defaults to the generic 40 ft offshore polar)</label>
+    <label for="d_polar">Polar (optional — defaults to the generic 40 ft offshore polar)</label>
     <textarea id="d_polar" rows="3" placeholder="TWA	6	8	10 …"></textarea>
     <div style="margin-top:12px"><button id="d_go">Read documents &amp; create race</button></div>
-    <div class="msg" id="d_msg"></div>
+    <div class="msg" id="d_msg" aria-live="polite"></div>
     <div id="d_result" style="display:none" class="small">
       <div id="d_summary"></div>
       <ul id="d_warn" class="steplist" style="color:var(--accent)"></ul>
@@ -140,46 +141,46 @@
     <h2>Create a race</h2>
     <div class="row">
       <div>
-        <label>Race name</label>
+        <label for="c_name">Race name</label>
         <input id="c_name" placeholder="Rolex Middle Sea Race 2026">
       </div>
       <div>
-        <label>Start time (UTC, ISO)</label>
+        <label for="c_start">Start time (UTC, ISO)</label>
         <input id="c_start" placeholder="2026-08-24T14:00:00Z">
       </div>
     </div>
-    <label>Description</label>
+    <label for="c_desc">Description</label>
     <input id="c_desc" placeholder="optional">
-    <label>Course marks — one per line: <code>name, lat, lon</code> (first = start, last = finish;
+    <label for="c_marks">Course marks — one per line: <code>name, lat, lon</code> (first = start, last = finish;
       decimal degrees or degrees-minutes, e.g. <code>40° 59.2' N</code>)</label>
     <textarea id="c_marks" rows="4" placeholder="Start, 40° 59.2' N, 073° 32.3' W&#10;Finish, 32.2800, -64.8400"></textarea>
-    <label>Polar — paste the class polar (TWS header row, one row per TWA; the format your routing software exports)</label>
+    <label for="c_polar">Polar — paste the class polar (TWS header row, one row per TWA; the format your routing software exports)</label>
     <textarea id="c_polar" rows="6" placeholder="TWA	6	8	10	12	14	16	20&#10;40	4.9	5.8	6.4	6.7	6.9	7.0	7.1&#10;..."></textarea>
     <div class="row" style="margin-top:10px">
       <div>
-        <label>Polar name</label>
+        <label for="c_pname">Polar name</label>
         <input id="c_pname" placeholder="J/122 ORC">
       </div>
       <div>
-        <label>Performance factor (0–1)</label>
+        <label for="c_perf">Performance factor (0–1)</label>
         <input id="c_perf" value="0.9">
       </div>
       <div>
-        <label>Sim step (minutes)</label>
+        <label for="c_step">Sim step (minutes)</label>
         <input id="c_step" value="10">
       </div>
       <div>
-        <label>Mark radius (nm)</label>
+        <label for="c_rad">Mark radius (nm)</label>
         <input id="c_rad" value="2">
       </div>
     </div>
     <div class="row" style="margin-top:4px">
       <div>
-        <label>Maneuver penalty (seconds per tack/gybe)</label>
+        <label for="c_pen">Maneuver penalty (seconds per tack/gybe)</label>
         <input id="c_pen" value="120">
       </div>
       <div>
-        <label>Grounding depth (ft — shallower = half speed)</label>
+        <label for="c_depth">Grounding depth (ft — shallower = half speed)</label>
         <input id="c_depth" value="15">
       </div>
       <div>
@@ -190,7 +191,7 @@
       </div>
     </div>
     <div style="margin-top:14px"><button id="c_go">Create race</button></div>
-    <div class="msg" id="c_msg"></div>
+    <div class="msg" id="c_msg" aria-live="polite"></div>
     <div id="c_next" style="display:none" class="small">
       <h3>Link the real fleet (YB Tracking)</h3>
       <p class="muted">If the real race is on yb.tl, enter its slug (the part after
@@ -198,11 +199,11 @@
       every 10 minutes. The optional filter keeps only boats whose model
       matches, e.g. <code>J/122</code>.</p>
       <div class="row">
-        <div><label>YB race slug</label><input id="yb_slug" placeholder="fastnet2025"></div>
-        <div><label>Model filter (optional)</label><input id="yb_filter" placeholder="IMOCA"></div>
+        <div><label for="yb_slug">YB race slug</label><input id="yb_slug" placeholder="fastnet2025"></div>
+        <div><label for="yb_filter">Model filter (optional)</label><input id="yb_filter" placeholder="IMOCA"></div>
       </div>
       <div style="margin-top:10px"><button id="yb_go" class="ghost">Import real fleet</button></div>
-      <div class="msg" id="yb_msg"></div>
+      <div class="msg" id="yb_msg" aria-live="polite"></div>
     </div>
   </div>
 
@@ -220,7 +221,7 @@
     lasts 90 days. Pages load fonts from Google and map tiles from OpenStreetMap
     and NOAA, which see your IP address.</p>
   </footer>
-</div>
+</main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="/js/auth.js"></script>
@@ -334,7 +335,7 @@ async function loadRaces() {
   const cta = document.getElementById('cta_race');
   if (featured) {
     cta.href = `/race?id=${featured.id}`;
-    cta.querySelector('button').textContent = `Enter ${featured.name}`;
+    cta.textContent = `Enter ${featured.name}`;
     document.getElementById('cta_note').textContent = featured.status === 'racing'
       ? `Racing now · ${featured.entries_total} boat${featured.entries_total === 1 ? '' : 's'} on the course`
       : `Starts ${until(featured.start_time)}`;
