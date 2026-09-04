@@ -6,9 +6,10 @@
   --border: #101418;          /* structural rules are ink */
   --text: #101418;
   --muted: #4c545c;
-  --faint: #8a9096;
+  --faint: #646b71;           /* 5.9:1 on white: readable at 10.5px bold */
   --accent: #c8102e;          /* signal red — the one loud thing */
   --accent-dim: #c8102e14;
+  --focus: #c8102e;
   --steel: #35708e;           /* quiet steel for virtual-fleet marks */
   --good: #1a7a4a;
   --bad: #c8102e;
@@ -137,13 +138,29 @@ table.list tr:hover td { background: #10141806; }
 /* ---- forms ----------------------------------------------------------------- */
 input, textarea, select {
   background: var(--bg); color: var(--text);
-  border: 1px solid #b6babe; border-radius: 0;
+  border: 1px solid #8a9096; border-radius: 0;   /* 3.2:1 boundary on white */
   padding: 7px 10px; font: inherit; width: 100%;
 }
-input:focus, textarea:focus {
+input:focus, textarea:focus, select:focus {
   outline: none; border-color: var(--border);
-  box-shadow: 0 0 0 2px var(--accent-dim);
+  box-shadow: 0 0 0 3px #c8102e40;
 }
+:is(a, button, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus); outline-offset: 2px;
+}
+.skip {
+  position: absolute; left: 8px; top: -60px; z-index: 2000;
+  background: var(--text); color: #fff; padding: 8px 12px;
+  font-size: 13px; font-weight: 700;
+}
+.skip:focus { top: 8px; color: #fff; text-decoration: none; }
+/* a link that looks like the primary button (CTAs that navigate, not submit) */
+a.btn {
+  display: inline-block; background: var(--accent); color: #fff;
+  border: 1.5px solid var(--accent); padding: 8px 16px;
+  font-size: 12.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+}
+a.btn:hover { background: #a30d25; border-color: #a30d25; color: #fff; text-decoration: none; }
 textarea { font-family: var(--mono); font-size: 12px; }
 label {
   display: block; margin: 10px 0 4px;
@@ -212,7 +229,7 @@ form { margin: 0; }
 .lb-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .lb-filters button {
   background: transparent; color: var(--muted);
-  border: 1px solid #b6babe; border-radius: 0;
+  border: 1px solid #8a9096; border-radius: 0;
   padding: 3px 9px; font-size: 11px; font-weight: 700;
   letter-spacing: .05em; text-transform: uppercase;
 }
@@ -322,3 +339,6 @@ details.card:not([open]) > summary { margin-bottom: -14px; border-bottom: 0; }
   table.list { font-size: 13px; }
   table.list th, table.list td { padding: 7px 6px; }
 }
+
+/* keyboard-reachable leaderboard rows */
+#lb tbody tr[tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }

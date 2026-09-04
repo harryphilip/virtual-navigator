@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="site">
   <div class="logo"><a href="/" style="color:inherit"><svg viewBox="0 0 56 44" aria-hidden="true"><line x1="5" y1="2" x2="5" y2="42" stroke="currentColor" stroke-width="3"></line><path d="M8 4 L52 22 L8 40 Z" fill="#c8102e"></path><path d="M12 27 C 18 18, 24 18, 29 23 C 33 27, 37 26, 41 21" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path></svg><span>Virtual Navigator</span></a></div>
   <div class="sub" id="r_name">loading…</div>
@@ -20,8 +21,8 @@
 <div id="wx_warn" style="display:none;background:#c8102e;color:#fff;padding:8px 16px;
      font-size:13px;font-weight:600" role="alert"></div>
 
-<div class="race-grid">
-  <div id="map"></div>
+<main class="race-grid" id="main">
+  <div id="map" aria-label="Chart"></div>
   <div class="side">
 
     <div class="card" id="race_head" style="display:none">
@@ -95,7 +96,7 @@
             <button class="ghost" id="mb_copy_lon">Copy lon</button>
           </div>
         </div>
-        <div class="msg" id="mb_msg2"></div>
+        <div class="msg" id="mb_msg2" aria-live="polite"></div>
 
         <h3>Submit a route</h3>
         <p class="small muted" style="margin:2px 0 8px">
@@ -141,7 +142,7 @@
 
     <div class="card">
       <h2>Leaderboard</h2>
-      <div class="small muted" id="lb_meta" style="margin:-4px 0 8px"></div>
+      <div class="small muted" id="lb_meta" role="status" style="margin:-4px 0 8px"></div>
       <div class="lb-filters" id="lb_filters"></div>
       <div class="lb-scroll table-scroll">
         <table class="list" id="lb">
@@ -220,7 +221,7 @@
       and NOAA, which see your IP address.</p>
     </footer>
   </div>
-</div>
+</main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="/js/auth.js"></script>
@@ -518,13 +519,23 @@ function drawLeaderboard() {
   const fdiv = document.getElementById('lb_filters');
   const opts = [['all', 'All'], ['virtual', 'Virtual'], ['real', 'Real'],
     ...classes.map(c => [c, 'Class: ' + c])];
-  fdiv.innerHTML = '';
-  for (const [val, lab] of opts) {
-    const b = document.createElement('button');
-    b.textContent = lab;
-    b.className = filter === val ? 'on' : '';
-    b.onclick = () => { filter = val; drawLeaderboard(); drawFleet(); };
-    fdiv.appendChild(b);
+  // rebuild the buttons only when the set changes, so a poll never steals focus
+  const sig = opts.map(o => o[0]).join('|');
+  if (fdiv.dataset.sig !== sig) {
+    fdiv.innerHTML = '';
+    fdiv.dataset.sig = sig;
+    for (const [val, lab] of opts) {
+      const b = document.createElement('button');
+      b.textContent = lab;
+      b.dataset.val = val;
+      b.setAttribute('aria-pressed', String(filter === val));
+      b.onclick = () => { filter = val; drawLeaderboard(); drawFleet(); };
+      fdiv.appendChild(b);
+    }
+  }
+  for (const b of fdiv.children) {
+    b.className = filter === b.dataset.val ? 'on' : '';
+    b.setAttribute('aria-pressed', String(filter === b.dataset.val));
   }
   const tb = document.querySelector('#lb tbody');
   tb.innerHTML = '';
@@ -548,7 +559,8 @@ function drawLeaderboard() {
     if (e.started) {
       tr.style.cursor = 'pointer';
       tr.title = 'Compare with this boat';
-      tr.onclick = (ev) => {
+      tr.tabIndex = 0;
+      const pick = (ev) => {
         if (ev.target.closest('a')) return;
         if (e.type === 'real') cmpSel.real = e.id; else cmpSel.virtual = e.id;
         fillCompare();
@@ -556,6 +568,8 @@ function drawLeaderboard() {
         card.open = true;
         card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       };
+      tr.onclick = pick;
+      tr.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(ev); } };
     }
     return tr;
   };
