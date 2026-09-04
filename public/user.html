@@ -24,6 +24,18 @@
     <div style="margin-top:8px" id="p_adminbox"></div>
   </div>
 
+  <div class="card" id="p_account" style="display:none">
+    <h2>Account</h2>
+    <form id="f_email" novalidate>
+      <label for="p_email">Email for password resets (optional)</label>
+      <input id="p_email" name="email" type="email" autocomplete="email" maxlength="120">
+      <div class="row actions"><button type="submit" class="ghost">Save</button></div>
+      <div class="msg" id="p_email_msg" aria-live="polite"></div>
+    </form>
+    <p class="small muted" style="margin:6px 0 0">Used only to send a reset link when you ask for one.
+    Leave it blank to keep no email on file; a forgotten password then cannot be recovered.</p>
+  </div>
+
   <div class="card">
     <h2>Races &amp; results</h2>
     <div class="table-scroll"><table class="list" id="p_boats">
@@ -52,7 +64,8 @@
     Polars: meltemus.com. Real-boat positions: YB Tracking and aisstream.io, shown
     for comparison only. Not affiliated with any race organiser.</p>
     <p><b>Your data.</b> An account is a username, a display name and a password
-    hash. No email is kept, so there is no password reset. Sailed tracks and
+    hash, plus an email address if you choose to add one, used only to send a
+    password-reset link. Sailed tracks and
     submission times are public; future waypoints are not. The session cookie
     lasts 90 days. Pages load fonts from Google and map tiles from OpenStreetMap
     and NOAA, which see your IP address.</p>
@@ -85,6 +98,26 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s ?? 
     `@${u.username} · aboard since ${VN_MONTHS[joined.getUTCMonth()]} ${joined.getUTCFullYear()} · ` +
     `${j.boats.length} race${j.boats.length === 1 ? '' : 's'}`;
 
+  if (j.is_self) {
+    const me = await vnMe();
+    document.getElementById('p_account').style.display = 'block';
+    document.getElementById('p_email').value = (me && me.email) || '';
+    document.getElementById('f_email').onsubmit = async (ev) => {
+      ev.preventDefault();
+      const msg = document.getElementById('p_email_msg');
+      msg.className = 'msg'; msg.textContent = '…';
+      try {
+        const r = await fetch('/api/auth/email', { method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: document.getElementById('p_email').value }) });
+        const jj = await r.json();
+        if (!r.ok) throw new Error(jj.error || r.statusText);
+        msg.className = 'msg ok';
+        msg.textContent = jj.email ? `Saved: reset links go to ${jj.email}.` : 'Saved: no email on file.';
+        await vnMe(true);
+      } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+    };
+  }
   if (j.viewer_is_admin && !j.is_self) {
     const box = document.getElementById('p_adminbox');
     box.innerHTML = `<button class="ghost" id="p_mkadmin">` +

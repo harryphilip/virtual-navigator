@@ -51,6 +51,7 @@
           <div class="row actions">
             <button type="submit">Sign in</button>
             <button type="button" class="ghost" id="mb_show_reg">Create an account</button>
+            <a href="/#forgot" class="small">Forgot password?</a>
           </div>
         </form>
         <form id="mb_form_reg" autocomplete="on" novalidate hidden>
@@ -63,11 +64,13 @@
             <div><label for="mb_rpass">Password</label>
               <input id="mb_rpass" name="password" type="password" autocomplete="new-password" required minlength="6"></div>
           </div>
+          <label for="mb_remail">Email (optional, only for password resets)</label>
+          <input id="mb_remail" name="email" type="email" autocomplete="email" maxlength="120">
           <div class="row actions">
             <button type="submit">Create account</button>
             <button type="button" class="ghost" id="mb_show_login">I have an account</button>
           </div>
-          <p class="small muted" style="margin:6px 0 0">Passwords cannot be reset: no email is kept, so write it down.</p>
+          <p class="small muted" style="margin:6px 0 0">Without an email on file a forgotten password cannot be reset, so write it down.</p>
         </form>
         <div class="msg" id="mb_msg" aria-live="polite"></div>
       </div>
@@ -215,7 +218,8 @@
       Polars: meltemus.com. Real-boat positions: YB Tracking and aisstream.io, shown
       for comparison only. Not affiliated with any race organiser.</p>
       <p><b>Your data.</b> An account is a username, a display name and a password
-      hash. No email is kept, so there is no password reset. Sailed tracks and
+      hash, plus an email address if you choose to add one, used only to send a
+    password-reset link. Sailed tracks and
       submission times are public; future waypoints are not. The session cookie
       lasts 90 days. Pages load fonts from Google and map tiles from OpenStreetMap
       and NOAA, which see your IP address.</p>
@@ -831,7 +835,8 @@ async function authAction(ev, path, ids) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: document.getElementById(ids.user).value,
                             password: document.getElementById(ids.pass).value,
-                            display_name: ids.disp ? document.getElementById(ids.disp).value : '' }) });
+                            display_name: ids.disp ? document.getElementById(ids.disp).value : '',
+                            email: ids.email ? document.getElementById(ids.email).value : '' }) });
     msg.textContent = '';
     await vnMe(true); vnHeader();
     await showManage(); refreshMine().catch(() => {});
@@ -840,7 +845,7 @@ async function authAction(ev, path, ids) {
 document.getElementById('mb_form_login').onsubmit = ev =>
   authAction(ev, '/api/auth/login', { user: 'mb_user', pass: 'mb_pass' });
 document.getElementById('mb_form_reg').onsubmit = ev =>
-  authAction(ev, '/api/auth/register', { user: 'mb_ruser', pass: 'mb_rpass', disp: 'mb_rdisp' });
+  authAction(ev, '/api/auth/register', { user: 'mb_ruser', pass: 'mb_rpass', disp: 'mb_rdisp', email: 'mb_remail' });
 document.getElementById('mb_show_reg').onclick = () => mbShowAuth('reg');
 document.getElementById('mb_show_login').onclick = () => mbShowAuth('login');
 

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reset password · Virtual Navigator</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/style.css">
+<meta name="robots" content="noindex">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="logo"><a href="/" style="color:inherit"><svg viewBox="0 0 56 44" aria-hidden="true"><line x1="5" y1="2" x2="5" y2="42" stroke="currentColor" stroke-width="3"></line><path d="M8 4 L52 22 L8 40 Z" fill="#c8102e"></path><path d="M12 27 C 18 18, 24 18, 29 23 C 33 27, 37 26, 41 21" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path></svg><span>Virtual Navigator</span></a></div>
+  <div class="sub">Reset password</div>
+  <div class="right"><a href="/how">How it works</a></div>
+</header>
+<main class="wrap" id="main">
+  <div class="card" style="max-width:520px;margin:32px auto">
+    <h2>Choose a new password</h2>
+    <form id="f_reset" novalidate>
+      <label for="p1">New password</label>
+      <input id="p1" name="password" type="password" autocomplete="new-password" required minlength="6">
+      <label for="p2">New password again</label>
+      <input id="p2" type="password" autocomplete="new-password" required minlength="6">
+      <div class="row actions"><button type="submit">Set password</button></div>
+      <div class="msg" id="msg" aria-live="polite"></div>
+    </form>
+    <p class="small muted" style="margin:8px 0 0">The link in the email works once and for one hour.
+    Every other session on this account is signed out when the password changes.</p>
+  </div>
+  <footer class="site-foot">
+    <p><b>Not for navigation.</b> Virtual Navigator is a simulation. Nothing here
+    may be used to navigate a vessel.</p>
+    <p>Wind and current: <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a>
+    (CC BY 4.0). Charts: NOAA ENC, <a href="https://www.openstreetmap.org/copyright"
+    rel="noopener">OpenStreetMap</a> contributors, OpenSeaMap. Bathymetry: NOAA NCEI.
+    Polars: meltemus.com. Real-boat positions: YB Tracking and aisstream.io, shown
+    for comparison only. Not affiliated with any race organiser.</p>
+    <p><b>Your data.</b> An account is a username, a display name and a password
+    hash, plus an email address if you choose to add one, used only to send a
+    password-reset link. Sailed tracks and
+    submission times are public; future waypoints are not. The session cookie
+    lasts 90 days. Pages load fonts from Google and map tiles from OpenStreetMap
+    and NOAA, which see your IP address.</p>
+    <p><a href="https://github.com/harryphilip/virtual-navigator" rel="noopener">Source on GitHub</a>, MIT licence. Leaflet is BSD-2-Clause.</p>
+  </footer>
+</main>
+<script src="/js/auth.js"></script>
+<script>
+const token = new URLSearchParams(location.search).get('token') || '';
+const msg = document.getElementById('msg');
+if (!token) {
+  msg.className = 'msg err';
+  msg.textContent = 'This link is missing its token. Open the link from the email again, or ask for a new one on the home page.';
+}
+document.getElementById('f_reset').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const p1 = document.getElementById('p1').value, p2 = document.getElementById('p2').value;
+  if (p1.length < 6) { msg.className = 'msg err'; msg.textContent = 'Password must be at least 6 characters.'; return; }
+  if (p1 !== p2) { msg.className = 'msg err'; msg.textContent = 'The two passwords do not match.'; return; }
+  msg.className = 'msg'; msg.textContent = '…';
+  try {
+    const res = await fetch('/api/auth/reset', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password: p1 }) });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || res.statusText);
+    msg.className = 'msg ok';
+    msg.innerHTML = `Password changed. You are signed in as <b>${vnEsc(j.user.display_name)}</b>. ` +
+      '<a href="/">Back to the race board</a>.';
+    document.getElementById('f_reset').querySelector('button').disabled = true;
+    await vnMe(true); vnHeader();
+  } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+};
+</script>
+</body>
+</html>

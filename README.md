@@ -122,8 +122,14 @@ through real historical wind.
 ## Accounts & roles
 
 Navigator accounts are a username and a password (salted PBKDF2, 90-day
-session cookies); no email is collected, so there is no password reset. Two
-roles on one account type:
+session cookies). An email address is optional and used for one thing:
+password-reset links (single use, one hour, every other session signed out
+on change). Reset mail goes out over SMTP when the server has
+`SMTP_HOST`, `SMTP_PORT` (587 STARTTLS or 465 TLS), `SMTP_USER`,
+`SMTP_PASS` and `MAIL_FROM` set (`fly secrets set …`); any provider with an
+SMTP endpoint works. `MAIL_BACKEND=console` logs the link instead (dev,
+tests); with neither configured the reset form says so. Two roles on one
+account type:
 
 - **Navigators** register boats in races, submit routings, and get a public
   profile page (`/user?u=<name>`) showing every race they've sailed, results

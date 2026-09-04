@@ -13,7 +13,15 @@ CREATE TABLE IF NOT EXISTS users (
   salt TEXT NOT NULL,
   pass_hash TEXT NOT NULL,
   is_admin INTEGER DEFAULT 0,           -- admins create/manage races AND race
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  email TEXT                            -- optional, lower-case; only for password resets
+);
+CREATE TABLE IF NOT EXISTS password_resets (
+  token_hash TEXT PRIMARY KEY,          -- sha256 of the link token
+  user_id INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS sessions (
   token TEXT PRIMARY KEY,
@@ -172,6 +180,8 @@ MIGRATIONS = [
     "ALTER TABLE real_boats ADD COLUMN mmsi INTEGER",
     "ALTER TABLE real_boats ADD COLUMN sail_no TEXT",
     "ALTER TABLE track ADD COLUMN src TEXT",
+    "ALTER TABLE users ADD COLUMN email TEXT",
+    "CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email) WHERE email IS NOT NULL",
 ]
 
 
