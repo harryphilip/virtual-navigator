@@ -95,6 +95,43 @@ def catch_up_race(db, race_id, now=None, max_steps=None):
                 db.commit()
 
 
+SETTING_RANGES = {
+    # key: (default, low, high, unit) — the values a race may sail with
+    "perf_factor": (0.9, 0.3, 1.2, "of polar"),
+    "step_minutes": (10, 1, 60, "minutes"),
+    "mark_radius_nm": (2.0, 0.1, 20.0, "nm"),
+    "maneuver_penalty_s": (120.0, 0.0, 3600.0, "seconds"),
+    "grounding_depth_ft": (15.0, 0.0, 200.0, "ft"),
+}
+
+
+def race_settings(d):
+    """The engine parameters for a new race, from any creation path (API,
+    document import, console script), with defaults applied and every
+    value range-checked. A step of zero would spin the engine forever;
+    a radius of zero means no boat ever passes a mark. Raises ValueError
+    naming the offending setting."""
+    out = {}
+    for key, (default, lo, hi, unit) in SETTING_RANGES.items():
+        raw = d.get(key, default)
+        if raw is None or raw == "":
+            raw = default
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            raise ValueError(f"{key} must be a number ({unit})")
+        if not lo <= val <= hi:
+            raise ValueError(f"{key} must be between {lo:g} and {hi:g} {unit}, got {val:g}")
+        if key == "step_minutes":
+            if val != int(val):
+                raise ValueError("step_minutes must be a whole number of minutes")
+            val = int(val)
+        out[key] = val
+    v = d.get("currents_enabled", True)
+    out["currents_enabled"] = 1 if v not in (False, 0, "0", "false", "no", "off") else 0
+    return out
+
+
 def race_zones(race):
     """Exclusion zone polygons for a race row: [{'name', 'pts'}]."""
     try:
