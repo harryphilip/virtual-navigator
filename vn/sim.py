@@ -34,6 +34,19 @@ def get_marks(db, race_id):
                       (race_id,)).fetchall()
 
 
+def race_bbox(db, race_id, margin_deg=3.0):
+    """(lat0, lat1, lon0, lon1) around a race's marks and its boats, padded —
+    the water this race is actually sailing, for scoping weather health."""
+    pts = [(m["lat"], m["lon"]) for m in get_marks(db, race_id)]
+    pts += [(b["lat"], b["lon"]) for b in db.execute(
+        "SELECT lat, lon FROM boats WHERE race_id=? AND lat IS NOT NULL", (race_id,))]
+    if not pts:
+        return None
+    lats, lons = [p[0] for p in pts], [p[1] for p in pts]
+    return (min(lats) - margin_deg, max(lats) + margin_deg,
+            min(lons) - margin_deg, max(lons) + margin_deg)
+
+
 def catch_up_race(db, race_id, now=None):
     """Advance every virtual boat in the race to `now`."""
     now = int(now or time.time())

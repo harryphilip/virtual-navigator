@@ -24,8 +24,8 @@ from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to
 from vn.polar import Polar
 from vn.realfleet import ingest_points, recompute
 from vn.sim import (catch_up_race, dtf_nm, enforce_course, get_marks, mark_side,
-                    race_polar, race_zones)
-from vn.wind import wind_health
+                    race_bbox, race_polar, race_zones)
+from vn.wind import heal_fallback, wind_health
 
 app = Flask(__name__, static_folder="public", static_url_path="")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)   # Fly's TLS proxy
@@ -473,7 +473,7 @@ def race_state(race_id):
                     "course_len_nm": course_len,
                     "marks": [{"name": m["name"], "lat": m["lat"], "lon": m["lon"]}
                               for m in marks],
-                    "weather": wind_health(db, now),
+                    "weather": wind_health(db, now, race_bbox(db, race_id)),
                     "entries": entries})
 
 
@@ -724,7 +724,7 @@ def submit_route(boat_id):
     race = _race_or_404(db, b["race_id"])
     now = int(time.time())
 
-    wx = wind_health(db, now)
+    wx = wind_health(db, now, race_bbox(db, race["id"]))
     if wx["degraded"]:
         return _err(
             "routing uploads are paused: the weather source is unreachable and "
@@ -1133,11 +1133,10 @@ SNAPSHOT_SECONDS = 6 * 3600
 _yb_last = {}
 
 
-_wx_degraded = None      # last observed weather health (None until first tick)
+_wx_degraded = {}        # race id -> weather health seen on the last tick
 
 
 def _tick():
-    global _wx_degraded
     db = get_db()
     now = int(time.time())
     live = []
@@ -1147,20 +1146,31 @@ def _tick():
         live.append(r)
         catch_up_race(db, r["id"], now)
 
-    # weather health transitions go on every live race's committee log
-    wx = wind_health(db, now)
-    if _wx_degraded is not None and wx["degraded"] != _wx_degraded:
-        msg = (f"⚠ Weather source degraded: {wx['synthetic_cells']} wind "
-               "cell(s) fell back to placeholder data (API unreachable). "
-               "Routing uploads are paused; the server retries every 15 min."
-               if wx["degraded"] else
-               "Weather source restored — all wind cells carry real data "
-               "again; routing uploads reopened.")
-        for r in live:
+    # placeholder weather is refetched from here, on the cooldown, whether or
+    # not a boat happens to cross the cell again
+    try:
+        healed = heal_fallback(db, now)
+        if healed:
+            print(f"[ticker] weather: {healed} placeholder cell(s) replaced with real data")
+    except Exception:
+        traceback.print_exc()
+
+    # weather health is judged per race, over the water that race sails, and
+    # every transition goes on that race's committee log
+    for r in live:
+        wx = wind_health(db, now, race_bbox(db, r["id"]))
+        prev = _wx_degraded.get(r["id"])
+        if prev is not None and wx["degraded"] != prev:
+            msg = (f"⚠ Weather source degraded: {wx['synthetic_cells']} wind "
+                   "cell(s) fell back to placeholder data (API unreachable). "
+                   "Routing uploads are paused; the server retries every 15 min."
+                   if wx["degraded"] else
+                   "Weather source restored — all wind cells carry real data "
+                   "again; routing uploads reopened.")
             add_race_log(db, r["id"], msg)
-        db.commit()
-        print(f"[ticker] {msg}")
-    _wx_degraded = wx["degraded"]
+            db.commit()
+            print(f"[ticker] race {r['id']}: {msg}")
+        _wx_degraded[r["id"]] = wx["degraded"]
 
     for r in live:
         if r["yb_slug"] and now - _yb_last.get(r["id"], 0) >= YB_POLL_SECONDS:
