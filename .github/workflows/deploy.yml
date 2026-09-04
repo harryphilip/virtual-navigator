@@ -1,0 +1,40 @@
+# The only road to production. Every push and pull request runs the tests;
+# a push to main that passes them is deployed. Nothing else deploys
+# virtual-navigator: not a laptop, not a branch. Branch work that has to be
+# exercised on a server goes to the staging app (fly.staging.toml).
+name: Test and deploy
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+
+  deploy:
+    name: Deploy to Fly.io
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: deploy-group   # one deploy at a time
+    steps:
+      - uses: actions/checkout@v7
+      - uses: superfly/flyctl-actions/setup-flyctl@1.6
+      - name: Snapshot the data volume before the new build goes live
+        run: |
+          vol=$(flyctl volumes list --app virtual-navigator --json | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')
+          flyctl volumes snapshots create "$vol" --app virtual-navigator
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - run: flyctl deploy --remote-only --ha=false
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

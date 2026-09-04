@@ -1161,9 +1161,13 @@ _yb_last = {}
 
 
 _wx_degraded = {}        # race id -> weather health seen on the last tick
+_tick_started_at = None  # wall clock, for /healthz
+_tick_done_at = None
 
 
 def _tick():
+    global _tick_started_at, _tick_done_at
+    _tick_started_at = time.time()
     db = get_db()
     now = int(time.time())
     live = []
@@ -1216,6 +1220,35 @@ def _tick():
                 print(f"[ticker] forecast snapshot for race {r['id']}")
             except Exception:
                 traceback.print_exc()
+    _tick_done_at = time.time()
+
+
+TICK_STALE_SECONDS = 5 * TICK_SECONDS    # no completed tick for this long: unhealthy
+TICK_STUCK_SECONDS = 15 * 60             # a tick running this long: unhealthy
+
+
+@app.get("/healthz")
+def healthz():
+    """Liveness for the platform check. 503 when the ticker has stopped
+    completing ticks (or one is stuck), so the machine is restarted rather
+    than the fleet silently parking. Ticker-less processes (tests, a shell)
+    report the database only."""
+    now = time.time()
+    db = get_db()
+    db.execute("SELECT 1").fetchone()
+    done_age = None if _tick_done_at is None else int(now - _tick_done_at)
+    started_age = None if _tick_started_at is None else int(now - _tick_started_at)
+    ok = True
+    if _ticker_started:
+        running = started_age is not None and (done_age is None or _tick_started_at > _tick_done_at)
+        if running:
+            ok = started_age <= TICK_STUCK_SECONDS
+        else:
+            ok = done_age is not None and done_age <= TICK_STALE_SECONDS
+    body = {"ok": ok, "ticker": _ticker_started,
+            "last_tick_age_s": done_age, "tick_running_for_s": started_age if _ticker_started else None,
+            "weather": wind_health(db, int(now))}
+    return jsonify(body), (200 if ok else 503)
 
 
 def _poll_yb(db, race):

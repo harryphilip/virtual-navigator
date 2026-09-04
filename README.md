@@ -198,25 +198,29 @@ GET  /api/forecasts/<id>.grb         download one snapshot as GRIB-1
 
 ## Working on the code
 
-**Build features on a branch. Merge to `main` only when the feature is
-finished, tested, and going out in the next deploy.**
-
-This is not ceremony — `fly deploy` builds from the working directory, not
-from `main`. Anything sitting unfinished in the tree ships the moment
-someone deploys something else, and two half-done features editing the
-same file turn every commit into a hand-separated diff.
+**Build features on a branch. Merge to `main` when the feature is finished
+and the tests pass. Pushing `main` is the deploy.**
 
 ```bash
 git switch -c real-vs-virtual     # start the work
-# … build and test it …
+# … build it, run the tests …
 git switch main && git merge --no-ff real-vs-virtual
-fly deploy                        # main == what's live
+git push                          # tests run in CI, then main is deployed
 ```
 
-Because deploy ignores `main`, you can also `fly deploy` straight **from the
-branch** to exercise something you can only run on the server — an ops script
-in `scripts/`, say — and merge once it works. Merging early to get code onto
-the box is never necessary.
+Production (`virtual-navigator` on Fly.io) is deployed by one road only: the
+GitHub Action in `.github/workflows/deploy.yml`, from `main`, after the test
+suite passes, with a volume snapshot taken first. A hand `fly deploy` from a
+laptop builds whatever happens to be in the working directory, skips the
+tests, and races the Action; don't.
+
+Something that can only be tried on a server (an ops script in `scripts/`,
+a tracker link, a document import) goes to the **staging app** straight from
+the branch, and is merged once it works there:
+
+```bash
+fly deploy --config fly.staging.toml     # virtual-navigator-staging
+```
 
 Rules that follow from that:
 
@@ -227,24 +231,33 @@ Rules that follow from that:
   exactly how stray commits reach `main`. `--no-ff` at least leaves a
   record; a fast-forward merge makes branch work and direct commits
   indistinguishable afterwards.
-- **Keep `main` deployable at all times.** `main` should always be safe to
-  ship; if it isn't, the next person to deploy anything ships your bug.
-- **Deploy from a clean tree.** Run `git status` before `fly deploy`. If it
-  isn't clean, you don't know what you're about to put in front of the
-  fleet — commit it, stash it, or switch branches first.
+- **Keep `main` deployable at all times.** Every push to `main` ships; if
+  `main` isn't safe to ship, the next person to merge anything ships your
+  bug.
+- **Freeze around a start.** From two hours before a race gun until the
+  fleet has cleared the line, nothing goes to `main`. A deploy restarts the
+  engine and replays the gap; the start is the worst moment for that.
 - **Verify against the live site, not the local file.** An edit that only
-  exists on disk is not live. `curl` the deployed page (or open it) and
-  confirm the change is actually there before calling it done.
+  exists on disk is not live. Check `/healthz`, `curl` the deployed page (or
+  open it) and confirm the change is actually there before calling it done.
 - **One worktree per concurrent session.** Branches share a single checkout,
   so two sessions in the same directory are always on the same branch, and
   `git switch` in one moves the other. When someone else's uncommitted work
   is in the tree, work from `git worktree add ../vn-<feature> -b <feature>`
   instead of switching.
-- **Check `fly releases`** if prod doesn't match what you expect — someone
-  else may have deployed since you last looked.
+- **Check `fly releases`** and the Action log if prod doesn't match what
+  you expect — someone else may have pushed since you last looked.
 
 Races run continuously and the sim advances every minute, so a bad deploy
 is sailed through and cannot be rewound. That is the reason for the care.
+
+### Backups
+
+The Action snapshots the Fly volume before every deploy. Fly also keeps
+automatic daily snapshots for a few days. To restore, create a new volume
+from a snapshot and attach it (`fly volumes snapshots list <vol>`, then
+`fly volumes create vn_data --snapshot-id <id>`), and rehearse that once on
+staging before you need it.
 
 ## Tests
 
@@ -262,7 +275,10 @@ is fixed on its own branch.
 ## Design notes & simplifications
 
 - A background ticker advances every race in its active window (start − 72 h
-  to start + 60 d) once a minute; state requests also catch up on demand, so
+  to start + 60 d) once a minute, at most 24 h of steps per tick, so a gap
+  after a restart is sailed over a few ticks while requests keep being served
+  from stored state; without the ticker (tests, a shell) requests catch up
+  on demand, so
   the sim is correct even after a server restart.
 - Boats hold the rhumb line to their next waypoint and "tack in place" at
   best VMC rather than sailing explicit zig-zags; a 3 % hysteresis keeps them

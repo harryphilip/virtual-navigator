@@ -5,3 +5,6 @@ __pycache__/
 data/vn.sqlite*
 .DS_Store
 .claude/
+tests/
+.github/
+.pytest_cache/

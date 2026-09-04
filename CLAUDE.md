@@ -5,25 +5,28 @@ See **Working on the code** in `README.md` for the reasoning behind these.
 ## Branch, don't build on main
 
 Build every feature on its own branch. Merge to `main` only when the feature
-is finished, tested, and going out in the next deploy.
+is finished and the tests pass; pushing `main` is the deploy.
 
 ```bash
 git switch -c <feature-name>
-# … build and test …
-git switch main && git merge <feature-name>
-fly deploy
+# … build, run .venv/bin/python -m pytest …
+git switch main && git merge --no-ff <feature-name>
+git push                       # the Action runs the tests, then deploys
 ```
 
-`fly deploy` builds from the **working directory, not from `main`**. Unfinished
-work sitting in the tree ships the moment anyone deploys anything else. Two
-features in progress in the same file also mean neither can be committed
-without hand-separating the diff.
+**Production is deployed only by the GitHub Action, from `main`, after the
+tests pass.** Never run `fly deploy` against `virtual-navigator` from a
+laptop: a hand deploy builds from whatever is in the working directory,
+skips the tests, and races the Action.
 
-That same fact is also the escape hatch: because deploy ignores `main`, you can
-`fly deploy` **from the feature branch** to exercise a change on the server —
-needed for anything you can only run there, like a `scripts/` ops tool. Merge
-after it works, not before. There is never a reason to merge early just to get
-code onto the box.
+Work that can only be tried on a server (a `scripts/` ops tool, a tracker
+link, a document import) goes to the **staging app** from the branch:
+
+```bash
+fly deploy --config fly.staging.toml   # virtual-navigator-staging
+```
+
+Merge after it works there, not before.
 
 ## One session, one worktree
 
@@ -53,27 +56,30 @@ main picks up stray commits in practice, and it is worth a deliberate
 merge leaves no trace, so branch work and direct commits look identical in the
 log afterwards and the mistake is invisible.
 
-## Before deploying
+## Before pushing main
 
-- `git status` must be clean. If it isn't, stop — you don't know what you are
-  about to ship. Commit it, stash it, or switch branches.
-- Never bundle someone else's unfinished work into your deploy. If the tree
-  holds changes that aren't yours, say so and ask rather than shipping them.
-- `main` must stay deployable, because the next person to deploy anything
-  ships whatever is sitting there.
+- The suite is green locally: `.venv/bin/python -m pytest`.
+- `main` holds only merged, finished branches. The next push ships everything
+  on it, so never merge something you would not deploy tonight.
+- Never merge someone else's unfinished work to get it out of the way. If a
+  branch or worktree isn't yours, say so and ask.
+- **Deploy freeze around a start.** From two hours before any race gun until
+  the fleet has cleared the line, nothing is pushed to `main`. A deploy
+  restarts the engine and replays the gap under the lock; the start is the
+  worst moment for that.
 
-## After deploying
+## After pushing main
 
-Verify against the **live site**, not the local file — an edit on disk is not
-live:
+Watch the Action, then verify against the **live site**, not the local file:
 
 ```bash
+curl -s https://virtual-navigator.fly.dev/healthz
 curl -s https://virtual-navigator.fly.dev/race.html | grep <the-thing>
 fly releases --app virtual-navigator | head
 ```
 
-If prod doesn't match what you expect, check `fly releases` — someone else may
-have deployed since you last looked.
+If prod doesn't match what you expect, check `fly releases` and the Action
+log — someone else may have pushed since you last looked.
 
 ## Why the care
 
