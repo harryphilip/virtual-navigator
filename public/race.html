@@ -35,21 +35,21 @@
         </table>
       </div>
       <div class="small" style="margin-top:10px">
-        <a id="dl_course" href="#" title="the official marks as a GPX route — import into your nav software and route between them">⬇ course route (.gpx)</a> ·
+        <a id="dl_course" href="#" title="the course marks as a GPX route. Import it into your routing software and route between them">⬇ course route (.gpx)</a> ·
         <a id="dl_polar" href="#">⬇ race polar (.pol)</a>
       </div>
     </div>
 
     <div class="card" id="cmp_card" style="display:none">
-      <h2>Real vs virtual — why the gap?</h2>
+      <h2>Real vs virtual: boat speed or navigation?</h2>
       <p class="small muted" style="margin:2px 0 8px">
-        A tracked boat ahead of you (or behind) is telling you two different
-        things. <b style="color:var(--text)">Boat speed</b>: its own track
-        re-sailed at race-polar speed through the same wind — how much faster
+        The gap to a tracked boat splits in two.
+        <b style="color:var(--text)">Boat speed</b>: its own track re-sailed
+        at race-polar speed through the same wind, which shows how much faster
         or slower than the polar it really goes.
-        <b style="color:var(--text)">Navigation</b>: what's left once boat
-        speed is taken out — where each boat went, and when. Click any
-        leaderboard row to pick it.</p>
+        <b style="color:var(--text)">Navigation</b>: what remains once boat
+        speed is removed, so where each boat went and when. Click a
+        leaderboard row to pick a boat.</p>
       <div class="row">
         <div><label>Real boat</label><select id="cmp_real"></select></div>
         <div><label>Virtual boat</label><select id="cmp_virtual"></select></div>
@@ -112,7 +112,7 @@
           <input type="file" id="mb_file" accept=".gpx,.csv,.txt,.xml" style="display:none">
         </div>
         <div id="mb_draw_ui" style="display:none;margin-top:8px" class="small">
-          <span class="muted">Click the chart to add waypoints —</span>
+          <span class="muted">Click the chart to add waypoints ·</span>
           <span id="mb_wp_n">0 waypoints</span>
           <div class="row" style="margin-top:6px">
             <button class="ghost" id="mb_undo">Undo</button>
@@ -135,18 +135,17 @@
     <div class="card" id="log_card" style="display:none">
       <h2>Committee log</h2>
       <p class="small muted" style="margin:2px 0 8px">
-        Every change to the course, exclusion zones, start time, or a boat's
-        routing is recorded here — what happened, when, and why.</p>
+        Every change to the course, exclusion zones, start time or a boat's
+        routing is recorded here, with when and why.</p>
       <div id="log_list" class="small"></div>
     </div>
 
     <div class="card">
       <h2>On-board forecasts</h2>
       <p class="small muted" style="margin:2px 0 8px">
-        The wind files the fleet is sailing on — snapshotted every 6 h from the
-        same model that drives the boats. Load them into your routing software
-        (GRIB-1, 10 m wind); the archive is the honest record of what was
-        knowable when.</p>
+        The wind the fleet is sailing in, saved every 6 hours from the same
+        model that drives the boats. Load a file into your routing software
+        (GRIB-1, 10 m wind). Older files show what was known at the time.</p>
       <div id="fx_list" class="small muted">no snapshots yet</div>
     </div>
 
@@ -154,13 +153,10 @@
       <b style="color:var(--text)">House rules.</b> One polar for the whole fleet,
       scaled to <span id="r_perf"></span> of polar targets. Your boat sails your
       waypoints through real surface wind <span id="r_cur"></span>, advancing
-      <span id="r_step"></span> — time never rewinds, so what's sailed is sailed.
-      Every tack or gybe costs <span id="r_pen"></span>, so a wiggly routing is a
-      slow routing, and water under <span id="r_depth"></span> drags you to half
-      speed — mind the shoals. Miss a mark and the committee quietly bends your
-      route back through it: never disqualified, never shortened. Route with
-      the forecasts you'd have on board; the ocean grades your homework in
-      real time.
+      <span id="r_step"></span>. What's sailed is locked. Every tack or gybe
+      costs <span id="r_pen"></span>, and water under <span id="r_depth"></span>
+      drops you to half speed. Miss a mark and your route is bent back through
+      it: no disqualification, no shortened course.
     </div>
   </div>
 </div>
@@ -267,7 +263,7 @@ function drawCourse() {
     L.circleMarker([m.lat, m.lon], {
       radius: 6, color: col.mark, weight: 2, fillColor: col.mark, fillOpacity: .35,
     }).addTo(courseLayer).bindTooltip(
-      `${i === 0 ? '⚑ ' : i === race.marks.length - 1 ? '🏁 ' : ''}${esc(m.name)}`,
+      `${i === 0 ? '⚑ ' : i === race.marks.length - 1 ? '🏁 ' : ''}${esc(m.name)}${m.side === 'stbd' ? ' — leave to starboard' : m.side === 'port' ? ' — leave to port' : ''}`,
       { className: 'boat-label', permanent: false });
   });
   // exclusion zones — keep out or sail at half speed
@@ -350,10 +346,10 @@ async function refresh() {
   state = await api(`/api/races/${raceId}/state`);
   const warn = document.getElementById('wx_warn');
   if (state.weather && state.weather.degraded) {
-    warn.textContent = `⚠ Weather source degraded — ${state.weather.synthetic_cells} ` +
+    warn.textContent = `⚠ Weather source degraded: ${state.weather.synthetic_cells} ` +
       'wind cell(s) are placeholder data while the forecast API is unreachable. ' +
-      'Routing uploads are paused until real wind returns (retried every 15 min); ' +
-      'see the committee log.';
+      'Routing uploads are paused until real wind returns (retried every 15 min). ' +
+      'See the committee log.';
     warn.style.display = 'block';
   } else {
     warn.style.display = 'none';
@@ -427,7 +423,7 @@ async function loadForecasts() {
   try {
     const fx = await api(`/api/races/${raceId}/forecasts`);
     const div = document.getElementById('fx_list');
-    if (!fx.length) { div.textContent = 'no snapshots yet — the first arrives within a minute of the server ticking'; return; }
+    if (!fx.length) { div.textContent = 'no snapshots yet — the first arrives within a minute'; return; }
     div.classList.remove('muted');
     div.innerHTML = fx.slice(0, 8).map(f => {
       const d = new Date(f.issued_at * 1000).toISOString().slice(5, 16).replace('T', ' ');
@@ -560,8 +556,8 @@ function renderCompare(c) {
         ['Boat speed', k.boat_speed_h,
          `${r.name} sailed at ${pct(r.pct_polar)} of the race polar on its own track`],
         ['Navigation', k.navigation_h,
-         'where each boat went and when — wind found, miles sailed, tacks paid'],
-        ['Start', k.start_h, 'clock offset at the gun'],
+         'where each boat went and when: wind found, miles sailed, tacks made'],
+        ['Start', k.start_h, 'difference in start time'],
       ];
       const scale = Math.max(...rows.map(x => Math.abs(x[1])), 0.25);
       h += '<div class="cmp-rows">' + rows.map(([lab, val, tip]) => {
@@ -665,7 +661,7 @@ async function refreshMine() {
   if (b.finished_at) {
     st.innerHTML = `<b>${esc(b.name)}</b> — 🏁 finished at ${when(b.finished_at)} UTC`;
   } else if (b.sim_time == null) {
-    st.innerHTML = `<b>${esc(b.name)}</b> — no routing yet. Submit one to leave the dock.`;
+    st.innerHTML = `<b>${esc(b.name)}</b> — no routing yet. Submit one to start sailing.`;
   } else {
     st.innerHTML = `<b>${esc(b.name)}</b> — ${b.dtf == null ? '' : Math.round(b.dtf) + ' nm to go · '}` +
       `${b.maneuvers} tacks/gybes` +
