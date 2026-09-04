@@ -52,27 +52,37 @@ header.site .right {
 
 .wrap { max-width: 1080px; margin: 0 auto; padding: 26px 22px 70px; }
 
-/* ---- home hero ----------------------------------------------------------- */
-.hero { padding: 40px 4px 30px; }
+/* ---- home hero: the pitch beside the live chart ----------------------------- */
+.hero {
+  display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 28px; align-items: center; padding: 34px 0 30px;
+}
 .hero h1 {
   margin: 0 0 12px; font-size: 34px; line-height: 1.08;
   font-weight: 800; text-transform: uppercase; letter-spacing: .005em;
-  max-width: 680px;
+  text-wrap: balance;
 }
-.hero .lead { margin: 0; max-width: 640px; color: var(--muted); font-size: 15.5px; }
+.hero .lead { margin: 0; color: var(--muted); font-size: 15px; max-width: 58ch; }
 .hero .lead b, .hero .lead i { color: var(--text); }
-.hero-tiles {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
-  margin-top: 24px; font-size: 13px; color: var(--muted);
-  border: 1px solid var(--border);
+.hero-cta { display: flex; align-items: center; gap: 16px; margin-top: 18px; flex-wrap: wrap; }
+.hero-cta a { display: inline-block; }
+#cta_note { margin-top: 8px; min-height: 18px; }
+.hero-chart #home_map { height: 340px; margin: 0; }
+#home_map_cap { margin-top: 6px; }
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; gap: 18px; padding-top: 24px; }
+  .hero-chart #home_map { height: 260px; }
 }
-.hero-tiles > div { padding: 14px 16px; }
-.hero-tiles > div + div { border-left: 1px solid var(--border); }
-.hero-tiles b { color: var(--text); }
-@media (max-width: 760px) {
-  .hero-tiles { grid-template-columns: 1fr; }
-  .hero-tiles > div + div { border-left: 0; border-top: 1px solid var(--border); }
+
+/* ---- documents (how it works) ------------------------------------------------ */
+.doc-title {
+  margin: 28px 0 10px; font-size: 30px; line-height: 1.1; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .005em; text-wrap: balance;
 }
+.doc > .lead { margin: 0 0 14px; color: var(--muted); font-size: 15px; max-width: 62ch; }
+.doc-toc { margin: 0 0 22px; color: var(--muted); }
+.doc .card p { max-width: 66ch; margin: 0 0 10px; }
+.doc .card p:last-child { margin-bottom: 0; }
 
 /* ---- home race board ------------------------------------------------------ */
 #home_map {
