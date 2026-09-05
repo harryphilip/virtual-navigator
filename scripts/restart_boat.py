@@ -8,7 +8,10 @@ Wipes the boat's sailed track and counters, re-arms its full submitted
 routing, reconciles it against the current course from the start mark
 (the same soft join a mid-race resubmission gets), detours the result
 around any exclusion zones (the join itself can create a crossing leg),
-and re-anchors the boat on the line at the gun.  The next tick replays
+and re-anchors the boat on the line at the virtual start — the gun, or
+the real fleet's start where the race waits for it (vn/fleetgate.py); a
+boat restarted while the fleet has not started waits on the line for it.
+The next tick replays
 the race so far through recorded weather: real wind is refetched back to
 92 days (the API's archive limit); anything older sails placeholder wind,
 and every fix on the track records which it was (audit_replay.py reads
@@ -20,6 +23,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from vn.db import add_race_log, get_db
 from vn.detour import route_around_zones, smart_join
+from vn.fleetgate import virtual_start
 from vn.sim import enforce_course, get_marks, race_zones
 
 
@@ -61,18 +65,23 @@ def main():
     db.execute("DELETE FROM route_wps WHERE boat_id=?", (b["id"],))
     db.executemany("INSERT INTO route_wps(boat_id,seq,lat,lon) VALUES (?,?,?,?)",
                    [(b["id"], i, la, lo) for i, (la, lo) in enumerate(wps)])
+    vs = virtual_start(db, race)
     db.execute(
         "UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=1, finished_at=NULL,"
         " wind_side=NULL, maneuvers=0, groundings=0, zone_steps=0 WHERE id=?",
-        (race["start_time"], start[0], start[1], b["id"]))
+        (vs, start[0], start[1], b["id"]))
     add_race_log(db, race_id,
-                 f"{name} restarted from the line and replayed from the gun "
-                 "through recorded weather."
+                 f"{name} restarted from the line and "
+                 + ("waits there for the real fleet to start." if vs is None else
+                    "replayed from the gun through recorded weather."
+                    if vs == race["start_time"] else
+                    "replayed from the fleet's start through recorded weather.")
                  + ("".join(" " + n[0].upper() + n[1:].rstrip(".") + "." for n in notes)
                     if notes else ""))
     db.commit()
     print(f"{name}: restarted on the line at {start[0]:.4f},{start[1]:.4f}, "
-          f"{len(wps)} waypoint(s) re-armed — replay begins next tick")
+          f"{len(wps)} waypoint(s) re-armed — "
+          + ("waits for the fleet to start" if vs is None else "replay begins next tick"))
     for n in notes:
         print("  •", n)
 

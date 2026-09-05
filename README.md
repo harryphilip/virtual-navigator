@@ -73,6 +73,13 @@ through real historical wind.
   plan; everything sailed is locked, and only not-yet-reached waypoints are
   replaced. Late entries start at the line at submission time, never
   backdated. Every submission is timestamped in an audit log.
+- **Virtual boats start when the real fleet does.** In a race with a tracked
+  real fleet, virtual boats wait on the line until 5% of the real boats have
+  been seen under way after the gun (`fleet_start_pct`, `vn/fleetgate.py`),
+  then start from that moment; a delayed start delays them with it. The
+  decision is recorded once. Boats already sailing are never moved;
+  `scripts/restart_boat.py` replays one from the fleet's start, and
+  `scripts/set_fleet_gate.py` changes the share or switches the gate off.
 - **On-board information only.** The engine evaluates with *actual* wind in
   near-real time, so nobody, server included, knows the future. You plan
   with the same forecasts you'd carry on board, and the past is already

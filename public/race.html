@@ -31,6 +31,7 @@
       <p class="small" id="rh_desc" style="margin:6px 0 10px"></p>
       <dl class="facts small">
         <dt>Start</dt><dd id="rh_start"></dd>
+        <dt>Virtual start</dt><dd id="rh_gate"></dd>
         <dt>Course</dt><dd id="rh_course"></dd>
         <dt>Polar</dt><dd id="rh_polar"></dd>
         <dt>Fleet</dt><dd id="rh_fleet"></dd>
@@ -317,6 +318,7 @@ async function loadRace() {
   const local = new Date(race.start_time * 1000)
     .toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   document.getElementById('rh_start').textContent = `${vnTime(race.start_time, true)} · ${local} local`;
+  renderGate(race);
   document.getElementById('rh_polar').textContent =
     `${race.polar_name} at ${Math.round(race.perf_factor * 100)}%`;
   document.getElementById('rh_course').textContent = `${race.marks.length} marks`;
@@ -444,6 +446,7 @@ async function refresh() {
   const hadFleet = !!fleetBounds;
   fleetBounds = fleetPts.length ? L.latLngBounds(fleetPts).pad(0.2) : null;
   if (!hadFleet && fleetBounds && !userMoved) fitHome();
+  renderGate(state);
   drawFleet();
   drawLeaderboard();
   fillCompare();
@@ -454,6 +457,17 @@ async function refresh() {
   document.getElementById('rh_fleet').textContent =
     `${nv} virtual boat${nv === 1 ? '' : 's'}` + (nr ? ` · ${nr} real boat${nr === 1 ? '' : 's'} on the tracker` : '');
   if (my) refreshMine().catch(() => {});
+}
+
+function renderGate(src) {
+  // a race with a tracked real fleet holds its virtual boats until the fleet is under way
+  const g = src.fleet_gate, el = document.getElementById('rh_gate');
+  if (!el) return;
+  if (!g) { el.textContent = ''; el.parentElement.style.display = 'none'; return; }
+  el.parentElement.style.display = '';
+  el.textContent = src.virtual_start
+    ? `${vnTime(src.virtual_start, true)} · fleet under way`
+    : `waits for the fleet · ${g.started} of ${g.needed} real boats under way`;
 }
 
 function drawFleet() {
@@ -787,6 +801,12 @@ async function refreshMine() {
   const mins = steps => `${steps * (race ? race.step_minutes : 10)} min`;
   if (b.finished_at) {
     st.innerHTML = `<b>${esc(b.name)}</b> · finished ${vnTime(b.finished_at)}`;
+  } else if (b.sim_time == null && b.route.length) {
+    const g = state && state.fleet_gate;
+    st.innerHTML = `<b>${esc(b.name)}</b> · Route on file. ` + (state && state.virtual_start
+      ? `The fleet is under way: the boat starts from ${vnTime(state.virtual_start)} on the next tick.`
+      : `Waiting on the line: the real fleet has not started yet` +
+        (g ? ` (${g.started} of ${g.needed} boats under way).` : '.'));
   } else if (b.sim_time == null) {
     st.innerHTML = `<b>${esc(b.name)}</b> · No route yet. Submit one and the boat starts sailing.`;
   } else {

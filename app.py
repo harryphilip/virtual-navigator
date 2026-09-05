@@ -20,6 +20,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from vn import ais, mail, yb
 from vn.compare import CompareError, compare
 from vn.db import add_race_log, get_db
+from vn.fleetgate import fleet_gate, open_gate, virtual_start
 from vn.forecast import make_snapshot
 from vn.nor import extract_race, MAX_DOC_BYTES
 from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to_gpx
@@ -165,6 +166,9 @@ def _freshen(db, race_id, now=None):
     engine lock; without it (tests, a one-off shell) the request advances
     the race itself."""
     if not _ticker_started:
+        race = db.execute("SELECT * FROM races WHERE id=?", (race_id,)).fetchone()
+        if race is not None:
+            open_gate(db, race, now)
         catch_up_race(db, race_id, now)
 
 
@@ -563,7 +567,10 @@ def race_detail(race_id):
                     "grounding_depth_ft": r["grounding_depth_ft"],
                     "zones": race_zones(r),
                     "yb_slug": r["yb_slug"] or "",
-                    "ais": bool(r["ais"])})
+                    "ais": bool(r["ais"]),
+                    "fleet_start_pct": r["fleet_start_pct"],
+                    "fleet_gate": fleet_gate(db, r),
+                    "virtual_start": virtual_start(db, r)})
 
 
 @app.get("/api/races/<int:race_id>/polar")
@@ -711,6 +718,8 @@ def race_state(race_id):
         e["rank"] = i + 1
 
     return jsonify({"now": now, "start_time": r["start_time"],
+                    "fleet_gate": fleet_gate(db, r),
+                    "virtual_start": virtual_start(db, r),
                     "course_len_nm": course_len,
                     "marks": [{"name": m["name"], "lat": m["lat"], "lon": m["lon"]}
                               for m in marks],
@@ -1010,13 +1019,22 @@ def submit_route(boat_id):
     # the whole replacement runs under the engine lock: the boat is sailed up
     # to now under its old routing, then the future is swapped, and no tick
     # can slip in between and mark the new routing's head as already passed
+    waiting = None
     try:
         with sim_lock(timeout=30):
             if b["sim_time"] is None:
-                # first routing: boat starts at the start line, never earlier than now
-                start_at = max(race["start_time"], now)
-                db.execute("UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=1 WHERE id=?",
-                           (start_at, marks[0]["lat"], marks[0]["lon"], b["id"]))
+                vs = virtual_start(db, race)
+                if vs is None:
+                    # the real fleet has not started: the routing is kept and the
+                    # boat waits on the line until the gate opens (fleetgate.open_gate)
+                    waiting = fleet_gate(db, race)
+                    db.execute("UPDATE boats SET lat=?, lon=?, next_mark=1 WHERE id=?",
+                               (marks[0]["lat"], marks[0]["lon"], b["id"]))
+                else:
+                    # first routing: boat starts at the start line, never earlier than now
+                    start_at = max(vs, now)
+                    db.execute("UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=1 WHERE id=?",
+                               (start_at, marks[0]["lat"], marks[0]["lon"], b["id"]))
             else:
                 catch_up_race(db, race["id"], now)   # lock the past before editing
             b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
@@ -1060,6 +1078,7 @@ def submit_route(boat_id):
         return _err(str(e), 503)
     return jsonify({"ok": True, "waypoints": len(wps),
                     "adjustments": adjustments,
+                    "waiting_for_fleet": waiting,
                     "locked_until": b["sim_time"] if b["sim_time"] else None})
 
 
@@ -1418,6 +1437,11 @@ def _tick():
         if now < r["start_time"] - 72 * 3600 or now > r["start_time"] + 60 * 86400:
             continue                                   # far from race window
         live.append(r)
+        try:
+            if open_gate(db, r, now):
+                log.info("race %s: fleet under way, virtual boats sent off", r["id"])
+        except Exception:
+            log.exception("fleet gate failed for race %s", r["id"])
         catch_up_race(db, r["id"], now, max_steps=MAX_STEPS_PER_TICK)
 
     # placeholder weather is refetched from here, on the cooldown, whether or
