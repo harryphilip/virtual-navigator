@@ -159,16 +159,24 @@ def test_entries_close_at_the_gun(client, db):
     assert [e["name"] for e in state["entries"] if e["started"]] == ["Magpie"]
 
 
-def test_a_gated_fleet_keeps_entries_open_past_the_scheduled_gun(client, db):
-    """With a tracked real fleet that has not started, virtual boats wait on
-    the line and so do entries: a postponement must not shut the door."""
+def test_a_postponed_real_fleet_does_not_reopen_entries(client, db):
+    """Entries close at the scheduled start even while the real fleet is
+    held; boats already on the line keep waiting and may change their route."""
     admin, race = make_race_via_api()
     db.execute("INSERT INTO real_boats(race_id,name,klass) VALUES (?,?,?)", (race, "Real One", "IMOCA"))
+    db.commit()
+    nav, late = new_client("nav"), new_client("late")
+    boat = nav.post(f"/api/races/{race}/boats", json={"name": "Magpie"}).get_json()["boat_id"]
+    r = nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]})
+    assert r.status_code == 200 and r.get_json()["waiting_for_fleet"] is not None
     db.execute("UPDATE races SET start_time=? WHERE id=?", (int(time.time()) - 3600, race))
     db.commit()
-    assert client.get(f"/api/races/{race}").get_json()["entries_open"] is True
-    nav = new_client("nav")
-    assert nav.post(f"/api/races/{race}/boats", json={"name": "Magpie"}).status_code == 200
+    assert client.get(f"/api/races/{race}").get_json()["entries_open"] is False
+    assert late.post(f"/api/races/{race}/boats", json={"name": "Latecomer"}).status_code == 409
+    assert nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.4, 0.1], [-0.5, 0.0]]}).status_code == 200
+    state = client.get(f"/api/races/{race}/state").get_json()
+    me = [e for e in state["entries"] if e["name"] == "Magpie"][0]
+    assert me["started"] is False and me["has_route"] is True     # still waiting for the fleet
 
 
 def test_gpx_upload_is_reconciled_with_the_course(client):

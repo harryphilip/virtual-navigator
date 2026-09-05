@@ -161,15 +161,15 @@ def _race_or_404(db, race_id):
 
 
 def _entries_close_at(db, race):
-    """When entries close: the moment the virtual fleet starts — the gun, or
-    the real fleet's start once the gate has opened. None while a gated
-    fleet is still on the line, so a postponed start keeps entries open."""
-    return virtual_start(db, race)
+    """Entries close at the scheduled start, full stop. Whether the virtual
+    boats then leave the line at once or wait for the real fleet to get
+    under way is the fleet gate's business (vn/fleetgate.py), not the
+    entry's."""
+    return race["start_time"]
 
 
 def _entries_open(db, race, now):
-    t = _entries_close_at(db, race)
-    return t is None or now < t
+    return now < _entries_close_at(db, race)
 
 
 def _freshen(db, race_id, now=None):
@@ -1021,8 +1021,8 @@ def register_boat(race_id):
         return _err("Sign in to do that.", 401)
     now = int(time.time())
     if not _entries_open(db, race, now):
-        return _err(f"Entries closed when the race started at "
-                    f"{stamp(_entries_close_at(db, race))}. You can follow it, "
+        return _err(f"Entries closed at the scheduled start, "
+                    f"{stamp(_entries_close_at(db, race))}. You can follow this race, "
                     "and enter the next one before its gun.", 409)
     d = request.get_json(force=True)
     name = (d.get("name") or "").strip()
@@ -1144,6 +1144,15 @@ def submit_route(boat_id):
     try:
         with sim_lock(timeout=30):
             if b["sim_time"] is None:
+                has_route = db.execute("SELECT 1 FROM route_wps WHERE boat_id=? LIMIT 1",
+                                       (boat_id,)).fetchone() is not None
+                if now >= race["start_time"] and not has_route:
+                    # entered, but no route by the scheduled start: the boat did
+                    # not start, however long the real fleet is held
+                    db.rollback()
+                    return _err("This boat never started: entries closed at the scheduled "
+                                f"start ({stamp(race['start_time'])}) and no route had been "
+                                "submitted by then.", 409)
                 vs = virtual_start(db, race)
                 if vs is None:
                     # the real fleet has not started: the routing is kept and the
@@ -1151,11 +1160,6 @@ def submit_route(boat_id):
                     waiting = fleet_gate(db, race)
                     db.execute("UPDATE boats SET lat=?, lon=?, next_mark=1 WHERE id=?",
                                (marks[0]["lat"], marks[0]["lon"], b["id"]))
-                elif now >= vs:
-                    # entered, but no route by the gun: the boat did not start
-                    db.rollback()
-                    return _err(f"This boat never started: entries closed at the gun "
-                                f"({stamp(vs)}) and no route had been submitted by then.", 409)
                 else:
                     # first routing before the gun: the boat waits on the line
                     # and the engine sends it off at the start
