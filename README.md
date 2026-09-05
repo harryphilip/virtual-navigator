@@ -78,8 +78,10 @@ through real historical wind.
   been seen under way after the gun (`fleet_start_pct`, `vn/fleetgate.py`),
   then start from that moment; a delayed start delays them with it. The
   decision is recorded once. Boats already sailing are never moved;
-  `scripts/restart_boat.py` replays one from the fleet's start, and
-  `scripts/set_fleet_gate.py` changes the share or switches the gate off.
+  `scripts/restart_boat.py` replays one from the fleet's start,
+  `scripts/set_virtual_start.py` sets the start by hand when the tracker
+  missed it, and `scripts/set_fleet_gate.py` changes the share or switches
+  the gate off.
 - **On-board information only.** The engine evaluates with *actual* wind in
   near-real time, so nobody, server included, knows the future. You plan
   with the same forecasts you'd carry on board, and the past is already
