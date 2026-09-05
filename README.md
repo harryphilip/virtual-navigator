@@ -90,7 +90,7 @@ through real historical wind.
   with the same forecasts you'd carry on board, and the past is already
   sailed.
 - **Private plans, public wakes.** Your future waypoints are visible only
-  with your PIN. Your sailed track is public, like any race tracker.
+  to you. Your sailed track is public, like any race tracker.
 - **On-board forecast archive.** Every 6 h the ticker snapshots the wind
   forecast over the race area — from the same model that will sail the boats —
   and stores it as a real **GRIB-1 file** (10 m U/V wind, 0–120 h, validated

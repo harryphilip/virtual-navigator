@@ -6,7 +6,6 @@ import time
 import pytest
 
 import vn.mail as mail
-from tests.conftest import new_client
 
 
 @pytest.fixture(autouse=True)

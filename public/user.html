@@ -73,15 +73,18 @@
   </footer>
 </main>
 
-<script src="/js/auth.js"></script>
+<script src="/js/vn.js"></script>
 <script>
 const uname = new URLSearchParams(location.search).get('u') || '';
-function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
 
 (async function init() {
-  const res = await fetch('/api/users/' + encodeURIComponent(uname));
-  const j = await res.json();
-  if (!res.ok) {
+  let j;
+  try {
+    j = await api('/api/users/' + encodeURIComponent(uname));
+  } catch (e) {
+    j = { error: e.message };
+  }
+  if (j.error) {
     document.title = 'No such navigator · Virtual Navigator';
     document.getElementById('p_name').textContent = 'Navigator';
     document.getElementById('p_meta').innerHTML =

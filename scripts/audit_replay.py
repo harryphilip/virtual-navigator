@@ -90,7 +90,7 @@ def main():
     armed = [(r["lat"], r["lon"]) for r in db.execute(
         "SELECT lat,lon FROM route_wps WHERE boat_id=? ORDER BY seq",
         (boat["id"],)).fetchall()]
-    print(f"\n--- routing ---")
+    print("\n--- routing ---")
     print(f"  {len(subs)} submission(s) on file:")
     for s in subs:
         wps = json.loads(s["wp_json"])

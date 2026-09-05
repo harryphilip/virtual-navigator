@@ -25,10 +25,10 @@ from vn.forecast import make_snapshot
 from vn.nor import extract_race, MAX_DOC_BYTES
 from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to_gpx
 from vn.polar import Polar
-from vn.realfleet import ingest_points, recompute
+from vn.realfleet import ingest_points
 from vn.geo import bearing_deg, haversine_nm
 from vn.sim import (SimBusy, catch_up_race, dtf_nm, enforce_course, get_marks, mark_side,
-                    race_bbox, race_polar, race_settings, race_zones, sim_lock)
+                    race_bbox, race_settings, race_zones, sim_lock)
 from vn.wind import heal_fallback, wind_health
 
 app = Flask(__name__, static_folder="public", static_url_path="")
@@ -585,7 +585,6 @@ def create_race():
         s = race_settings(d)
     except ValueError as e:
         return _err(f"invalid race definition: {e}")
-    admin_key = secrets.token_hex(12)
     cur = db.execute(
         "INSERT INTO races(name,description,start_time,perf_factor,step_minutes,"
         "mark_radius_nm,polar_name,polar_text,admin_key,created_at,"
@@ -593,7 +592,7 @@ def create_race():
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (name, d.get("description", ""), start,
          s["perf_factor"], s["step_minutes"], s["mark_radius_nm"],
-         d.get("polar_name", "race polar"), polar_text, admin_key, int(time.time()),
+         d.get("polar_name", "race polar"), polar_text, "", int(time.time()),
          s["maneuver_penalty_s"], s["currents_enabled"], s["grounding_depth_ft"]))
     db.execute("UPDATE races SET created_by=? WHERE id=?", (u["id"], cur.lastrowid))
     race_id = cur.lastrowid
@@ -1045,7 +1044,6 @@ def race_from_docs():
                            "maneuver_penalty_s": request.form.get("maneuver_penalty_s")})
     except ValueError as e:
         return _err(f"invalid race settings: {e}")
-    admin_key = secrets.token_hex(12)
     cur = db.execute(
         "INSERT INTO races(name,description,start_time,perf_factor,step_minutes,"
         "mark_radius_nm,polar_name,polar_text,admin_key,created_at,"
@@ -1053,7 +1051,7 @@ def race_from_docs():
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         ((ex["name"] or "Imported race")[:90], " — ".join(desc_bits), start,
          s["perf_factor"], s["step_minutes"], s["mark_radius_nm"],
-         polar_name or "race polar", polar_text, admin_key, now,
+         polar_name or "race polar", polar_text, "", now,
          s["maneuver_penalty_s"], s["currents_enabled"], s["grounding_depth_ft"]))
     race_id = cur.lastrowid
     db.execute("UPDATE races SET created_by=? WHERE id=?", (u["id"], race_id))
@@ -1226,7 +1224,7 @@ def submit_route(boat_id):
     if "gpx" in d or "csv" in d:
         try:
             wps = parse_route(d.get("gpx") or d.get("csv"))
-        except Exception as e:
+        except Exception:
             return _err("Couldn't read that file. Upload a GPX route or track, or a CSV with lat and lon columns.")
     else:
         try:

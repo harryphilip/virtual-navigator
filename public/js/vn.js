@@ -1,5 +1,7 @@
-/* Shared account widget: fills header .right with the signed-in state and
-   exposes vnMe() for pages to gate features on. */
+/* Shared client helpers, loaded by every page before its own script:
+   the account widget in the header, vnMe() to gate features on, one time
+   format, HTML escaping, a fetch wrapper that raises the server's message,
+   and a countdown. Nothing here touches page-specific state. */
 let _me;
 async function vnMe(force) {
   if (_me === undefined || force) {
@@ -17,6 +19,23 @@ function vnTime(t, withYear) {
     `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}Z`;
 }
 function vnEsc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+const esc = vnEsc;
+
+/* fetch JSON; on a non-2xx answer throw the server's own message */
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || res.statusText);
+  return j;
+}
+
+/* "in 2 d 4 h" until a unix time, or "started" */
+function until(ts) {
+  const s = ts - Date.now() / 1000;
+  if (s <= 0) return 'started';
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return d ? `in ${d} d ${h} h` : h ? `in ${h} h ${m} min` : `in ${m} min`;
+}
 
 async function vnHeader() {
   const slot = document.querySelector('header.site .right');

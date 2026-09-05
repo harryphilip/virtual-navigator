@@ -263,7 +263,7 @@
 </main>
 
 <script src="/vendor/leaflet/leaflet.js"></script>
-<script src="/js/auth.js"></script>
+<script src="/js/vn.js"></script>
 <script>
 const raceId = +new URLSearchParams(location.search).get('id');
 let race = null, state = null, me = null;
@@ -330,15 +330,8 @@ const fleetLayer = L.layerGroup().addTo(map);
 const planLayer = L.layerGroup().addTo(map);
 const drawLayer = L.layerGroup().addTo(map);
 
-function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
 function ordinal(n) { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return s[(v - 20) % 10] || s[v] || s[0]; }
 function fmt1(x) { return x == null ? '—' : (Math.round(x * 10) / 10).toFixed(1); }
-async function api(path, opts) {
-  const res = await fetch(path, opts);
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(j.error || res.statusText);
-  return j;
-}
 
 async function loadRace() {
   race = await api('/api/races/' + raceId);
