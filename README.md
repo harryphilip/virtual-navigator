@@ -246,7 +246,10 @@ fly deploy --config fly.staging.toml     # virtual-navigator-staging
 ```
 
 Staging sleeps when idle and wakes on the first request, holds its own
-empty database, and costs nothing between uses.
+empty database, and costs nothing between uses. The Action holds two Fly
+tokens: `FLY_API_TOKEN` for production and `FLY_STAGING_TOKEN`, a deploy
+token scoped to the staging app alone (`fly tokens create deploy -a
+virtual-navigator-staging`).
 
 Rules that follow from that:
 
