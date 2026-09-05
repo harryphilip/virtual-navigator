@@ -5,6 +5,7 @@ primary_region = "ewr"
 [env]
   VN_DB = "/data/vn.sqlite"
   VN_ENABLE_TICKER = "1"
+  VN_CANONICAL_HOST = "virtual-navigator.com"
 
 [mounts]
   source = "vn_data"
