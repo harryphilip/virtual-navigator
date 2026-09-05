@@ -172,6 +172,49 @@ def _entries_open(db, race, now):
     return now < _entries_close_at(db, race)
 
 
+def _default_route(race, marks):
+    """The straight-line course: every mark in order to the finish, with the
+    sided marks rounded on the correct side."""
+    wps = [(m["lat"], m["lon"]) for m in marks[1:]]
+    wps, _notes = enforce_course(wps, marks, 1, race["mark_radius_nm"],
+                                 (marks[0]["lat"], marks[0]["lon"]))
+    return wps
+
+
+def _start_unrouted(db, race, now):
+    """Nobody who entered is left on the dock. At the scheduled start every
+    boat that holds no route is given the straight-line course and started
+    like the rest: at the gun, or on the line waiting for the fleet gate.
+    Its navigator can replace the route at any time. Returns the names."""
+    if now < race["start_time"]:
+        return []
+    boats = db.execute(
+        "SELECT * FROM boats WHERE race_id=? AND sim_time IS NULL AND finished_at IS NULL "
+        "AND id NOT IN (SELECT boat_id FROM route_wps)", (race["id"],)).fetchall()
+    if not boats:
+        return []
+    marks = get_marks(db, race["id"])
+    wps = _default_route(race, marks)
+    vs = virtual_start(db, race)
+    names = []
+    with sim_lock(timeout=30):
+        for b in boats:
+            db.executemany("INSERT INTO route_wps(boat_id,seq,lat,lon) VALUES (?,?,?,?)",
+                           [(b["id"], i, la, lo) for i, (la, lo) in enumerate(wps)])
+            db.execute("INSERT INTO route_log(boat_id,submitted_at,wp_json) VALUES (?,?,?)",
+                       (b["id"], now, json.dumps(wps)))
+            db.execute("UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=1 WHERE id=?",
+                       (vs, marks[0]["lat"], marks[0]["lon"], b["id"]))
+            names.append(b["name"])
+        add_race_log(db, race["id"],
+                     f"{', '.join(names)} had no route at the start and "
+                     f"{'sails' if len(names) == 1 else 'sail'} the straight-line course "
+                     "through each mark to the finish; the navigator can take over at any time.")
+        db.commit()
+    _invalidate_state(race["id"])
+    return names
+
+
 def _freshen(db, race_id, now=None):
     """Read paths serve stored state. With the ticker running that state is
     at most a minute old and every request would otherwise queue behind the
@@ -1143,16 +1186,13 @@ def submit_route(boat_id):
     waiting = None
     try:
         with sim_lock(timeout=30):
+            if b["sim_time"] is None and now >= race["start_time"]:
+                # entered, no route by the scheduled start, and the ticker has
+                # not been round yet: start it on the default course now, then
+                # treat this submission as the update it is
+                _start_unrouted(db, race, now)
+                b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
             if b["sim_time"] is None:
-                has_route = db.execute("SELECT 1 FROM route_wps WHERE boat_id=? LIMIT 1",
-                                       (boat_id,)).fetchone() is not None
-                if now >= race["start_time"] and not has_route:
-                    # entered, but no route by the scheduled start: the boat did
-                    # not start, however long the real fleet is held
-                    db.rollback()
-                    return _err("This boat never started: entries closed at the scheduled "
-                                f"start ({stamp(race['start_time'])}) and no route had been "
-                                "submitted by then.", 409)
                 vs = virtual_start(db, race)
                 if vs is None:
                     # the real fleet has not started: the routing is kept and the
@@ -1568,6 +1608,12 @@ def _tick():
         if now < r["start_time"] - 72 * 3600 or now > r["start_time"] + 60 * 86400:
             continue                                   # far from race window
         live.append(r)
+        try:
+            names = _start_unrouted(db, r, now)
+            if names:
+                log.info("race %s: default course given to %s", r["id"], ", ".join(names))
+        except Exception:
+            log.exception("default course failed for race %s", r["id"])
         try:
             if open_gate(db, r, now):
                 log.info("race %s: fleet under way, virtual boats sent off", r["id"])
