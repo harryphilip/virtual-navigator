@@ -8,7 +8,7 @@ MARKS = [{"name": "Start", "lat": 0.0, "lon": 0.0},
 
 
 def race_body(**over):
-    body = {"name": "API Race", "start_time": int(time.time()) - 3600,
+    body = {"name": "API Race", "start_time": int(time.time()) + 3600,
             "polar_text": POLAR_40FT, "marks": MARKS, "currents_enabled": False}
     body.update(over)
     return body
@@ -114,8 +114,16 @@ def test_route_submission_matrix(client):
     assert admin.post(f"/api/boats/{boat}/route", json=wps).status_code == 200
 
 
-def test_first_submission_starts_the_boat_on_the_line(client):
-    admin, race = make_race_via_api(start_time=int(time.time()) - 7200)
+def sail_from(db, race, ago):
+    """Move a race's gun `ago` seconds into the past, boats on the line with it."""
+    t = int(time.time()) - ago
+    db.execute("UPDATE races SET start_time=?, virtual_start=NULL WHERE id=?", (t, race))
+    db.execute("UPDATE boats SET sim_time=? WHERE race_id=? AND sim_time IS NOT NULL", (t, race))
+    db.commit()
+
+
+def test_first_submission_before_the_gun_puts_the_boat_on_the_line(client, db):
+    admin, race = make_race_via_api()
     nav = new_client("nav")
     boat = nav.post(f"/api/races/{race}/boats", json={"name": "Magpie"}).get_json()["boat_id"]
     nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]})
@@ -123,9 +131,44 @@ def test_first_submission_starts_the_boat_on_the_line(client):
     me = [e for e in state["entries"] if e["name"] == "Magpie"][0]
     assert me["started"] is True and me["has_route"] is True
     assert me["owner"] == "nav"
-    # late entry: starts now, not backdated to the gun two hours ago
-    assert abs(me["dtf"] - state["course_len_nm"]) < 0.5
+    assert abs(me["dtf"] - state["course_len_nm"]) < 0.5      # on the line
     assert me["rank"] == 1
+    gun = client.get(f"/api/races/{race}").get_json()["start_time"]
+    assert db.execute("SELECT sim_time FROM boats WHERE id=?", (boat,)).fetchone()["sim_time"] == gun
+
+
+def test_entries_close_at_the_gun(client, db):
+    admin, race = make_race_via_api()
+    nav, late = new_client("nav"), new_client("late")
+    assert client.get(f"/api/races/{race}").get_json()["entries_open"] is True
+    boat = nav.post(f"/api/races/{race}/boats", json={"name": "Magpie"}).get_json()["boat_id"]
+    idle = nav.post(f"/api/races/{race}/boats", json={"name": "Idle"}).get_json()["boat_id"]
+    assert nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]}).status_code == 200
+    sail_from(db, race, 7200)                                  # the gun was two hours ago
+    detail = client.get(f"/api/races/{race}").get_json()
+    assert detail["entries_open"] is False and detail["entries_close_at"] == detail["start_time"]
+    r = late.post(f"/api/races/{race}/boats", json={"name": "Latecomer"})
+    assert r.status_code == 409 and "Entries closed" in r.get_json()["error"]
+    # entered before the gun but never routed: did not start
+    r = nav.post(f"/api/boats/{idle}/route", json={"waypoints": [[-0.5, 0.0]]})
+    assert r.status_code == 409 and "never started" in r.get_json()["error"]
+    # a boat that was on the line at the gun sails on and can still update its route
+    assert nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.3, 0.1], [-0.5, 0.0]]}).status_code == 200
+    state = client.get(f"/api/races/{race}/state").get_json()
+    assert state["entries_open"] is False
+    assert [e["name"] for e in state["entries"] if e["started"]] == ["Magpie"]
+
+
+def test_a_gated_fleet_keeps_entries_open_past_the_scheduled_gun(client, db):
+    """With a tracked real fleet that has not started, virtual boats wait on
+    the line and so do entries: a postponement must not shut the door."""
+    admin, race = make_race_via_api()
+    db.execute("INSERT INTO real_boats(race_id,name,klass) VALUES (?,?,?)", (race, "Real One", "IMOCA"))
+    db.execute("UPDATE races SET start_time=? WHERE id=?", (int(time.time()) - 3600, race))
+    db.commit()
+    assert client.get(f"/api/races/{race}").get_json()["entries_open"] is True
+    nav = new_client("nav")
+    assert nav.post(f"/api/races/{race}/boats", json={"name": "Magpie"}).status_code == 200
 
 
 def test_gpx_upload_is_reconciled_with_the_course(client):
@@ -171,10 +214,11 @@ def test_route_submission_waits_for_the_engine_lock(client, db, monkeypatch):
     import threading
     import vn.sim as sim
 
-    admin, race = make_race_via_api(start_time=int(time.time()) - 7200)
+    admin, race = make_race_via_api()
     nav = new_client("nav")
     boat = nav.post(f"/api/races/{race}/boats", json={"name": "Magpie"}).get_json()["boat_id"]
     assert nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]}).status_code == 200
+    sail_from(db, race, 7200)
 
     order, done, real = [], threading.Event(), sim._advance
     armed = [True]
@@ -199,12 +243,11 @@ def test_route_submission_waits_for_the_engine_lock(client, db, monkeypatch):
 
 def test_read_paths_serve_stored_state_when_the_ticker_runs(client, db, monkeypatch):
     import app as appmod
-    admin, race = make_race_via_api(start_time=int(time.time()) - 7200)
+    admin, race = make_race_via_api()
     nav = new_client("nav")
     boat = nav.post(f"/api/races/{race}/boats", json={"name": "Magpie"}).get_json()["boat_id"]
     nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]})
-    db.execute("UPDATE boats SET sim_time=? WHERE id=?", (int(time.time()) - 3600, boat))
-    db.commit()
+    sail_from(db, race, 3600)
     monkeypatch.setattr(appmod, "_ticker_started", True)
     client.get(f"/api/races/{race}/state")
     assert db.execute("SELECT COUNT(*) c FROM track WHERE boat_id=?", (boat,)).fetchone()["c"] == 0

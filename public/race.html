@@ -41,7 +41,7 @@
     <div class="card" id="myboat">
       <h2 id="mb_title">Enter this race</h2>
       <div id="mb_signin" style="display:none">
-        <p class="small muted" style="margin:2px 0 8px">Sign in to enter this race.</p>
+        <p class="small muted" style="margin:2px 0 8px" id="mb_signin_why">Sign in to enter this race.</p>
         <form id="mb_form_login" autocomplete="on" novalidate>
           <div class="row">
             <div><label for="mb_user">Username</label>
@@ -75,6 +75,7 @@
         </form>
         <div class="msg" id="mb_msg" aria-live="polite"></div>
       </div>
+      <div id="mb_closed" class="small muted" style="display:none"></div>
       <div id="mb_register" style="display:none">
         <form id="mb_form_enter" novalidate>
           <label for="mb_name">Boat name</label><input id="mb_name" name="boat" required maxlength="40" autocomplete="off">
@@ -795,10 +796,19 @@ async function showManage() {
   const boats = me ? await api(`/api/races/${raceId}/my_boats`) : [];
   if (boats.length && !my) my = { boatId: boats[0].id };
   if (my && !boats.some(b => b.id === my.boatId)) my = boats.length ? { boatId: boats[0].id } : null;
+  const src = state || race;
+  const open = !src || src.entries_open !== false;
+  const closedAt = race && race.entries_close_at ? vnTime(race.entries_close_at) : null;
   document.getElementById('mb_signin').style.display = me ? 'none' : 'block';
-  document.getElementById('mb_register').style.display = (me && !my) ? 'block' : 'none';
+  document.getElementById('mb_signin_why').textContent = open
+    ? 'Sign in to enter this race.' : 'Sign in to manage a boat you entered before the start.';
+  document.getElementById('mb_register').style.display = (me && !my && open) ? 'block' : 'none';
+  const closed = document.getElementById('mb_closed');
+  closed.style.display = (!my && !open) ? 'block' : 'none';
+  closed.textContent = `Entries closed when the race started${closedAt ? ' at ' + closedAt : ''}. ` +
+    'Follow the fleet here, and enter the next race before its gun.';
   document.getElementById('mb_manage').style.display = (me && my) ? 'block' : 'none';
-  document.getElementById('mb_title').textContent = (me && my) ? 'My boat' : 'Enter this race';
+  document.getElementById('mb_title').textContent = (me && my) ? 'My boat' : open ? 'Enter this race' : 'Entries closed';
   if (my) {
     document.getElementById('mb_course').href = `/api/races/${raceId}/course.gpx`;
     document.getElementById('mb_polar').href = `/api/races/${raceId}/polar`;
@@ -850,7 +860,9 @@ async function refreshMine() {
       : `Waiting on the line: the real fleet has not started yet` +
         (g ? ` (${g.started} of ${g.needed} boats under way).` : '.'));
   } else if (b.sim_time == null) {
-    st.innerHTML = `<b>${esc(b.name)}</b> · No route yet. Submit one and the boat starts sailing.`;
+    st.innerHTML = `<b>${esc(b.name)}</b> · ` + (state && state.entries_open === false
+      ? 'Entered, but no route by the gun: this boat did not start.'
+      : 'No route yet. Submit one before the gun and the boat starts with the fleet.');
   } else {
     st.innerHTML = `<b>${esc(b.name)}</b> · ${b.dtf == null ? '' : Math.round(b.dtf) + ' nm to go · '}` +
       `${b.maneuvers} tacks/gybes` +

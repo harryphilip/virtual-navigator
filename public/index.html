@@ -56,8 +56,8 @@
       You don't need routing software or offshore experience. The boat is
       virtual; the weather is real.</p>
     <ol class="steplist small">
-      <li><b>Create an account</b> below, open an upcoming or live race, and
-        enter a boat on its page.</li>
+      <li><b>Create an account</b> below, open an upcoming race, and enter a
+        boat on its page. Entries close at the gun.</li>
       <li><b>Draw a route.</b> Click <i>Draw on chart</i>, click a line of
         waypoints from start to finish, and submit. A straight line is a fine
         first route. The leaderboard will show you why the leaders didn't
@@ -370,9 +370,9 @@ async function loadRaces() {
   const cta = document.getElementById('cta_race');
   if (featured) {
     cta.href = `/race?id=${featured.id}`;
-    cta.textContent = `Enter ${featured.name}`;
+    cta.textContent = `${featured.status === 'racing' ? 'Follow' : 'Enter'} ${featured.name}`;
     document.getElementById('cta_note').textContent = featured.status === 'racing'
-      ? `Racing now · ${featured.entries_total} boat${featured.entries_total === 1 ? '' : 's'} on the course`
+      ? `Racing now · ${featured.entries_total} boat${featured.entries_total === 1 ? '' : 's'} on the course · entries closed at the gun`
       : `Starts ${until(featured.start_time)}`;
   }
 

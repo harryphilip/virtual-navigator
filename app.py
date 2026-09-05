@@ -20,7 +20,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from vn import ais, mail, yb
 from vn.compare import CompareError, compare
 from vn.db import add_race_log, get_db
-from vn.fleetgate import fleet_gate, open_gate, virtual_start
+from vn.fleetgate import fleet_gate, open_gate, stamp, virtual_start
 from vn.forecast import make_snapshot
 from vn.nor import extract_race, MAX_DOC_BYTES
 from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to_gpx
@@ -158,6 +158,18 @@ def _parse_time(s):
 
 def _race_or_404(db, race_id):
     return db.execute("SELECT * FROM races WHERE id=?", (race_id,)).fetchone()
+
+
+def _entries_close_at(db, race):
+    """When entries close: the moment the virtual fleet starts — the gun, or
+    the real fleet's start once the gate has opened. None while a gated
+    fleet is still on the line, so a postponed start keeps entries open."""
+    return virtual_start(db, race)
+
+
+def _entries_open(db, race, now):
+    t = _entries_close_at(db, race)
+    return t is None or now < t
 
 
 def _freshen(db, race_id, now=None):
@@ -488,6 +500,7 @@ def list_races():
         nr = db.execute("SELECT COUNT(*) c FROM real_boats WHERE race_id=?", (r["id"],)).fetchone()["c"]
         out.append({"id": r["id"], "name": r["name"], "description": r["description"],
                     "start_time": r["start_time"], "started": now >= r["start_time"],
+                    "entries_open": _entries_open(db, r, now),
                     "virtual_boats": nb, "real_boats": nr,
                     "polar_name": r["polar_name"], "perf_factor": r["perf_factor"]})
     return jsonify(out)
@@ -570,7 +583,9 @@ def race_detail(race_id):
                     "ais": bool(r["ais"]),
                     "fleet_start_pct": r["fleet_start_pct"],
                     "fleet_gate": fleet_gate(db, r),
-                    "virtual_start": virtual_start(db, r)})
+                    "virtual_start": virtual_start(db, r),
+                    "entries_open": _entries_open(db, r, int(time.time())),
+                    "entries_close_at": _entries_close_at(db, r)})
 
 
 @app.get("/api/races/<int:race_id>/polar")
@@ -799,6 +814,7 @@ def _build_state(db, r, now, since=None):
                       for m in marks],
             "weather": wind_health(db, now, race_bbox(db, race_id)),
             "delta": since is not None, "since": since,
+            "entries_open": _entries_open(db, r, now),
             "entries": entries}
 
 
@@ -997,11 +1013,17 @@ def download_doc(doc_id):
 @app.post("/api/races/<int:race_id>/boats")
 def register_boat(race_id):
     db = get_db()
-    if not _race_or_404(db, race_id):
+    race = _race_or_404(db, race_id)
+    if not race:
         return _err("race not found", 404)
     u = current_user(db)
     if not u:
         return _err("Sign in to do that.", 401)
+    now = int(time.time())
+    if not _entries_open(db, race, now):
+        return _err(f"Entries closed when the race started at "
+                    f"{stamp(_entries_close_at(db, race))}. You can follow it, "
+                    "and enter the next one before its gun.", 409)
     d = request.get_json(force=True)
     name = (d.get("name") or "").strip()
     if not name:
@@ -1129,11 +1151,16 @@ def submit_route(boat_id):
                     waiting = fleet_gate(db, race)
                     db.execute("UPDATE boats SET lat=?, lon=?, next_mark=1 WHERE id=?",
                                (marks[0]["lat"], marks[0]["lon"], b["id"]))
+                elif now >= vs:
+                    # entered, but no route by the gun: the boat did not start
+                    db.rollback()
+                    return _err(f"This boat never started: entries closed at the gun "
+                                f"({stamp(vs)}) and no route had been submitted by then.", 409)
                 else:
-                    # first routing: boat starts at the start line, never earlier than now
-                    start_at = max(vs, now)
+                    # first routing before the gun: the boat waits on the line
+                    # and the engine sends it off at the start
                     db.execute("UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=1 WHERE id=?",
-                               (start_at, marks[0]["lat"], marks[0]["lon"], b["id"]))
+                               (vs, marks[0]["lat"], marks[0]["lon"], b["id"]))
             else:
                 catch_up_race(db, race["id"], now)   # lock the past before editing
             b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
