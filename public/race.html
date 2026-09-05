@@ -431,8 +431,50 @@ legend.onAdd = () => {
 };
 legend.addTo(map);
 
+/* tracks live here between polls: the first poll brings the thinned whole
+   track, later polls bring only newer fixes (?since=) and they are merged */
+const tracks = {};          // "type:id" -> { pts: [[lat, lon, t]...], last_t, n }
+let polls = 0, wantFull = true;
+function thin(pts, cap) {
+  if (pts.length <= cap) return pts;
+  const stride = pts.length / cap, out = [];
+  for (let i = 0; i < cap; i++) out.push(pts[Math.floor(i * stride)]);
+  out[out.length - 1] = pts[pts.length - 1];
+  return out;
+}
+function mergeTracks(st) {
+  const seen = new Set();
+  st.entries.forEach(e => {
+    const key = e.type + ':' + e.id;
+    seen.add(key);
+    const k = tracks[key];
+    if (!st.delta) {
+      tracks[key] = { pts: e.track, last_t: e.last_t, n: e.track_n };
+    } else if (!k || e.track_n < k.n) {
+      // a boat we have never seen, or a track that shrank (a restart):
+      // this delta is not enough, fetch everything next time
+      tracks[key] = { pts: e.track, last_t: e.last_t, n: e.track_n };
+      wantFull = true;
+    } else {
+      const add = e.track.filter(p => k.last_t == null || p[2] > k.last_t);
+      if (add.length) {
+        k.pts = thin(k.pts.concat(add), 800);
+        k.last_t = e.last_t;
+      }
+      k.n = e.track_n;
+    }
+    e.track = tracks[key].pts;
+  });
+  for (const key of Object.keys(tracks)) if (!seen.has(key)) delete tracks[key];
+}
 async function refresh() {
-  state = await api(`/api/races/${raceId}/state`);
+  const known = Object.values(tracks).map(k => k.last_t).filter(t => t != null);
+  const full = wantFull || !known.length || polls % 15 === 0;
+  polls++;
+  wantFull = false;
+  const q = full ? '' : `?since=${Math.min(...known)}`;
+  state = await api(`/api/races/${raceId}/state${q}`);
+  mergeTracks(state);
   const warn = document.getElementById('wx_warn');
   if (state.weather && state.weather.degraded) {
     warn.textContent = 'Weather feed down. Some wind cells are placeholder data until the ' +
@@ -1038,7 +1080,11 @@ setInterval(() => {
   await loadRace();
   await showManage();
   await refresh();
-  setInterval(refresh, 60000);
+  // poll only while the page is visible; catch up the moment it is again
+  setInterval(() => { if (document.visibilityState === 'visible') refresh().catch(() => {}); }, 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refresh().catch(() => {});
+  });
 })().catch(e => {
   document.getElementById('r_name').textContent = 'Race not found';
   document.title = 'Race not found · Virtual Navigator';

@@ -126,6 +126,7 @@ def client(db, weather):
     import app as appmod
     appmod.app.config["TESTING"] = True
     appmod._buckets.clear()                     # rate-limit windows start fresh
+    appmod._state_cache.clear()                 # and no state from another test's database
     return appmod.app.test_client()
 
 
