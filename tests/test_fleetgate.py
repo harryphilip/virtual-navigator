@@ -141,16 +141,18 @@ def test_first_routing_waits_on_the_line_until_the_fleet_starts(client, db):
     assert detail["virtual_start"] == gun + H + 300 and detail["fleet_start_pct"] == 5
 
 
-def test_routing_after_the_gate_opened_starts_now_not_backdated(client, db):
+def test_first_routing_after_the_gate_opened_is_refused(client, db):
+    """Entries close when the virtual fleet starts. A boat entered before
+    the gun that still holds no route when the gate opens did not start."""
     race_id, nav, boat = api_race_with_fleet(db, 40)
     gun = race_row(db, race_id)["start_time"]
     fix(db, race_id, "R0", gun + 60)
     fix(db, race_id, "R1", gun + 120)
-    now = int(time.time())
     r = nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]})
-    assert r.get_json()["waiting_for_fleet"] is None
+    assert r.status_code == 409 and "never started" in r.get_json()["error"]
     mine = nav.get(f"/api/boats/{boat}").get_json()
-    assert mine["sim_time"] >= now - 5
+    assert mine["sim_time"] is None
+    assert client.get(f"/api/races/{race_id}").get_json()["entries_open"] is False
 
 
 def test_boats_already_sailing_are_not_moved_when_the_gate_opens(client, db):
