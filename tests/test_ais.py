@@ -146,3 +146,28 @@ def test_set_mmsi_wipe_clears_binding_and_track(db):
     assert rb["mmsi"] is None and rb["last_t"] is None and rb["next_mark"] == 1
     assert db.execute("SELECT COUNT(*) c FROM real_track WHERE rb_id=?",
                       (rb["id"],)).fetchone()["c"] == 0
+
+
+# ---- the fix time -------------------------------------------------------
+
+def test_fix_time_uses_the_report_second_not_the_receipt_time():
+    meta = {"time_utc": "2026-09-04 16:02:56.123456789 +0000 UTC"}   # received ashore
+    t_recv = ais.parse_time(meta["time_utc"])
+    assert ais.fix_time(meta, {"Timestamp": 50}) == t_recv - 6        # same minute
+    assert ais.fix_time(meta, {"Timestamp": 5}) == t_recv - 51        # previous minute, not the future
+    assert ais.fix_time(meta, {"Timestamp": 57}) == t_recv + 1        # a second of clock skew is fine
+    assert ais.fix_time(meta, {"Timestamp": 60}) == t_recv            # 60+: second unavailable
+    assert ais.fix_time(meta, {"Timestamp": None}) == t_recv
+    assert ais.fix_time(meta, {}) == t_recv
+    assert ais.fix_time({}, {"Timestamp": 10}, now=1000) == 1000        # no receipt time at all
+
+
+def test_stored_fix_carries_the_report_second(db):
+    race, marks, feed = vineyard(db)
+    t = int(time.time()) - 300
+    env = envelope(368000001, "MONEYBALL", 41.01, -73.40, t)
+    env["Message"]["PositionReport"]["Timestamp"] = (t % 60 + 30) % 60   # half a minute off the receipt
+    feed._handle(db, env, [race], marks)
+    stored = db.execute("SELECT t FROM real_track WHERE rb_id=?", (boat(db, race)["id"],)).fetchone()["t"]
+    assert stored == ais.fix_time(env["MetaData"], env["Message"]["PositionReport"])
+    assert stored != t and stored <= t + 2
