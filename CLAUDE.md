@@ -14,18 +14,23 @@ git switch main && git merge --no-ff <feature-name>
 git push                       # the Action runs the tests, then deploys
 ```
 
-**Production is deployed only by the GitHub Action, from `main`, after the
-tests pass.** Never run `fly deploy` against `virtual-navigator` from a
-laptop: a hand deploy builds from whatever is in the working directory,
-skips the tests, and races the Action.
+**Production is deployed only by the GitHub Action, from `main`.** A push
+to `main` runs the tests, deploys **staging** (`virtual-navigator-staging`),
+smoke-tests it (`scripts/smoke.sh`: healthy, answering, and running that
+exact commit), and only then deploys production, after a volume snapshot,
+and smoke-tests that too. Never run `fly deploy` against `virtual-navigator`
+from a laptop: a hand deploy builds from whatever is in the working
+directory, skips the tests, and races the Action.
 
 Work that can only be tried on a server (a `scripts/` ops tool, a tracker
-link, a document import) goes to the **staging app** from the branch:
+link, a document import) goes to staging **from the branch, by hand**:
 
 ```bash
 fly deploy --config fly.staging.toml   # virtual-navigator-staging
 ```
 
+Staging sleeps between uses and wakes on the first request; its database is
+its own (empty until you put something there), and nothing on it is real.
 Merge after it works there, not before.
 
 ## One session, one worktree
@@ -70,7 +75,8 @@ log afterwards and the mistake is invisible.
 
 ## After pushing main
 
-Watch the Action, then verify against the **live site**, not the local file:
+Watch the Action through its three jobs (tests, staging, production), then
+verify against the **live site**, not the local file:
 
 ```bash
 curl -s https://virtual-navigator.fly.dev/healthz

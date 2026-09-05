@@ -1,7 +1,10 @@
-# The only road to production. Every push and pull request runs the tests;
-# a push to main that passes them is deployed. Nothing else deploys
-# virtual-navigator: not a laptop, not a branch. Branch work that has to be
-# exercised on a server goes to the staging app (fly.staging.toml).
+# The only road to production. Every push and pull request runs the tests.
+# A push to main that passes them is deployed to staging, the staging app
+# is smoke-tested (it must answer, be healthy, and be running this exact
+# commit), and only then is production deployed, after a volume snapshot.
+# Nothing else deploys virtual-navigator: not a laptop, not a branch.
+# Branch work that needs a server is deployed to staging by hand with
+# `fly deploy --config fly.staging.toml`.
 name: Test and deploy
 on:
   push:
@@ -20,10 +23,24 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q
 
-  deploy:
-    name: Deploy to Fly.io
+  staging:
+    name: Deploy to staging
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: staging-group
+    steps:
+      - uses: actions/checkout@v7
+      - uses: superfly/flyctl-actions/setup-flyctl@1.6
+      - run: flyctl deploy --config fly.staging.toml --remote-only --ha=false --build-arg VN_VERSION=${{ github.sha }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Smoke test staging
+        run: bash scripts/smoke.sh https://virtual-navigator-staging.fly.dev ${{ github.sha }}
+
+  production:
+    name: Deploy to production
+    needs: staging
     runs-on: ubuntu-latest
     concurrency: deploy-group   # one deploy at a time
     steps:
@@ -35,6 +52,8 @@ jobs:
           flyctl volumes snapshots create "$vol" --app virtual-navigator
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - run: flyctl deploy --remote-only --ha=false
+      - run: flyctl deploy --remote-only --ha=false --build-arg VN_VERSION=${{ github.sha }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Smoke test production
+        run: bash scripts/smoke.sh https://virtual-navigator.fly.dev ${{ github.sha }}

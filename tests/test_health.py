@@ -6,6 +6,7 @@ def test_healthz_without_a_ticker_reports_the_database_only(client):
     assert r.status_code == 200
     body = r.get_json()
     assert body["ok"] is True and body["ticker"] is False
+    assert body["version"]                      # the build's commit, or "dev"
     assert body["weather"]["degraded"] is False
 
 

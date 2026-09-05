@@ -6,6 +6,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# which commit this image is: the Action passes the sha, /healthz reports it,
+# and the smoke test refuses to bless a machine running anything else
+ARG VN_VERSION=dev
+ENV VN_VERSION=$VN_VERSION
+
 # state lives on the mounted volume; the ticker keeps races advancing
 ENV VN_DB=/data/vn.sqlite \
     VN_ENABLE_TICKER=1 \
