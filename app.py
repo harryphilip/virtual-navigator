@@ -13,7 +13,7 @@ import logging
 import threading
 import time
 
-from flask import Flask, jsonify, request, send_from_directory, Response
+from flask import Flask, jsonify, redirect, request, send_from_directory, Response
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -42,6 +42,10 @@ if not logging.getLogger().handlers:      # gunicorn captures stdout; one line p
 TRACK_MAX_POINTS = 400
 SESSION_COOKIE = "vn_session"
 SESSION_DAYS = 90
+# Public hostname. When set, www.<host> is redirected here so the site has one
+# address; every other hostname (fly.dev, staging, localhost) is left alone so
+# health checks and smoke tests keep working.
+CANONICAL_HOST = os.environ.get("VN_CANONICAL_HOST", "").strip().lower()
 
 
 # ---------- helpers ---------------------------------------------------------
@@ -259,6 +263,17 @@ def handle_error(e):
     if request.path.startswith("/api/"):
         return jsonify({"error": "Something went wrong on the server. It has been logged."}), 500
     return "Something went wrong on the server. It has been logged.", 500
+
+
+@app.before_request
+def canonical_host():
+    """301 www.<canonical> to <canonical>, keeping path and query."""
+    if not CANONICAL_HOST:
+        return None
+    if request.host.lower() != "www." + CANONICAL_HOST:
+        return None
+    path = request.full_path if request.query_string else request.path
+    return redirect(f"https://{CANONICAL_HOST}{path}", code=301)
 
 
 @app.after_request
