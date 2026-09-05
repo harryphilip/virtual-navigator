@@ -659,42 +659,115 @@ def race_course_gpx(race_id):
                              f'attachment; filename="{safe}_course.gpx"'})
 
 
-@app.get("/api/races/<int:race_id>/state")
-def race_state(race_id):
-    db = get_db()
-    r = _race_or_404(db, race_id)
-    if not r:
-        return _err("race not found", 404)
-    now = int(time.time())
-    _freshen(db, race_id, now)
+# The fleet state is the page's heartbeat: every open race page asks for it
+# once a minute. Between ticks nothing in it can change, so the full payload
+# is built once per race per tick and served from memory; the ticker and any
+# write that adds a boat or a route drop the cached copy. Tracks are cut down
+# in SQL (one query per table for the whole fleet, not one per boat), and a
+# client that already holds the tracks asks for ?since=<t> and gets only the
+# fixes newer than that.
+
+_state_cache = {}            # race_id -> (built_at, payload)
+STATE_CACHE_SECONDS = 60
+REAL_TRACK_POINTS = 300
+
+
+def _invalidate_state(race_id):
+    _state_cache.pop(race_id, None)
+
+
+def _virtual_tracks(db, race_id, since=None, cap=TRACK_MAX_POINTS):
+    """{boat_id: [(t, lat, lon), ...]} for every boat in the race — every
+    fix newer than `since`, or the whole track thinned to about `cap`
+    points (first and last always kept), thinned by the database."""
+    if since is None:
+        rows = db.execute(
+            "SELECT boat_id, t, lat, lon FROM ("
+            "  SELECT tr.boat_id, tr.t, tr.lat, tr.lon,"
+            "         ROW_NUMBER() OVER (PARTITION BY tr.boat_id ORDER BY tr.t) rn,"
+            "         COUNT(*) OVER (PARTITION BY tr.boat_id) cnt"
+            "  FROM track tr JOIN boats b ON b.id = tr.boat_id WHERE b.race_id=?)"
+            " WHERE (rn - 1) % MAX(1, (cnt + ? - 1) / ?) = 0 OR rn = cnt"
+            " ORDER BY boat_id, t", (race_id, cap, cap))
+    else:
+        rows = db.execute(
+            "SELECT tr.boat_id, tr.t, tr.lat, tr.lon FROM track tr "
+            "JOIN boats b ON b.id = tr.boat_id WHERE b.race_id=? AND tr.t > ? "
+            "ORDER BY tr.boat_id, tr.t", (race_id, since))
+    out = {}
+    for r in rows:
+        out.setdefault(r["boat_id"], []).append((r["t"], r["lat"], r["lon"]))
+    return out
+
+
+def _real_tracks(db, race_id, since=None, cap=REAL_TRACK_POINTS):
+    """{rb_id: [(t, lat, lon), ...]}: the newest `cap` fixes, or those after `since`."""
+    if since is None:
+        rows = db.execute(
+            "SELECT rb_id, t, lat, lon FROM ("
+            "  SELECT rt.rb_id, rt.t, rt.lat, rt.lon,"
+            "         ROW_NUMBER() OVER (PARTITION BY rt.rb_id ORDER BY rt.t DESC) rn"
+            "  FROM real_track rt JOIN real_boats rb ON rb.id = rt.rb_id WHERE rb.race_id=?)"
+            " WHERE rn <= ? ORDER BY rb_id, t", (race_id, cap))
+    else:
+        rows = db.execute(
+            "SELECT rt.rb_id, rt.t, rt.lat, rt.lon FROM real_track rt "
+            "JOIN real_boats rb ON rb.id = rt.rb_id WHERE rb.race_id=? AND rt.t > ? "
+            "ORDER BY rt.rb_id, rt.t", (race_id, since))
+    out = {}
+    for r in rows:
+        out.setdefault(r["rb_id"], []).append((r["t"], r["lat"], r["lon"]))
+    return out
+
+
+def _track_meta(db, race_id):
+    """Per boat: fix count, last fix time and last boat speed, in one query."""
+    virt = {r["boat_id"]: r for r in db.execute(
+        "SELECT boat_id, n, last_t, bsp FROM ("
+        "  SELECT tr.boat_id, tr.t last_t, tr.bsp,"
+        "         COUNT(*) OVER (PARTITION BY tr.boat_id) n,"
+        "         ROW_NUMBER() OVER (PARTITION BY tr.boat_id ORDER BY tr.t DESC) rn"
+        "  FROM track tr JOIN boats b ON b.id = tr.boat_id WHERE b.race_id=?)"
+        " WHERE rn = 1", (race_id,))}
+    real = {r["rb_id"]: r for r in db.execute(
+        "SELECT rt.rb_id, COUNT(*) n, MAX(rt.t) last_t FROM real_track rt "
+        "JOIN real_boats rb ON rb.id = rt.rb_id WHERE rb.race_id=? GROUP BY rt.rb_id",
+        (race_id,))}
+    return virt, real
+
+
+def _build_state(db, r, now, since=None):
+    race_id = r["id"]
     marks = get_marks(db, race_id)
     course_len = dtf_nm(marks[0]["lat"], marks[0]["lon"], marks, 1) if len(marks) > 1 else 0
+    owners = {u["id"]: u["username"] for u in db.execute(
+        "SELECT u.id, u.username FROM users u WHERE u.id IN "
+        "(SELECT owner_id FROM boats WHERE race_id=?)", (race_id,))}
+    routed = {row["boat_id"] for row in db.execute(
+        "SELECT DISTINCT w.boat_id FROM route_wps w JOIN boats b ON b.id = w.boat_id "
+        "WHERE b.race_id=? AND w.passed=0", (race_id,))}
+    vtracks = _virtual_tracks(db, race_id, since)
+    rtracks = _real_tracks(db, race_id, since)
+    vmeta, rmeta = _track_meta(db, race_id)
+    pts = lambda seq: [[p[1], p[2], p[0]] for p in seq]      # [lat, lon, t]
 
-    owners = {r["id"]: r["username"] for r in db.execute("SELECT id, username FROM users")}
     entries = []
     for b in db.execute("SELECT * FROM boats WHERE race_id=?", (race_id,)):
-        trk = db.execute("SELECT t,lat,lon,bsp FROM track WHERE boat_id=? ORDER BY t",
-                         (b["id"],)).fetchall()
-        last = trk[-1] if trk else None
-        has_route = db.execute(
-            "SELECT COUNT(*) c FROM route_wps WHERE boat_id=? AND passed=0",
-            (b["id"],)).fetchone()["c"] > 0
+        m = vmeta.get(b["id"])
         entries.append({
             "type": "virtual", "id": b["id"], "name": b["name"], "klass": "virtual",
             "lat": b["lat"], "lon": b["lon"],
-            "sog": last["bsp"] if last else None,
+            "sog": m["bsp"] if m else None,
             "dtf": dtf_nm(b["lat"], b["lon"], marks, b["next_mark"]) if b["lat"] is not None else course_len,
             "finished_at": b["finished_at"], "started": b["sim_time"] is not None,
-            "has_route": has_route, "maneuvers": b["maneuvers"] or 0,
+            "has_route": b["id"] in routed, "maneuvers": b["maneuvers"] or 0,
             "owner": owners.get(b["owner_id"]),
-            "track": [[p["lat"], p["lon"]] for p in _decimate(trk)],
+            "track": pts(vtracks.get(b["id"], ())),
+            "track_n": m["n"] if m else 0, "last_t": m["last_t"] if m else None,
         })
     for rb in db.execute("SELECT * FROM real_boats WHERE race_id=?", (race_id,)):
-        trk = db.execute(
-            "SELECT lat,lon FROM real_track WHERE rb_id=? ORDER BY t DESC LIMIT 300",
-            (rb["id"],)).fetchall()
-        trk.reverse()
         started = rb["last_t"] is not None
+        m = rmeta.get(rb["id"])
         entries.append({
             "type": "real", "id": rb["id"], "name": rb["name"],
             "klass": rb["klass"] or "real",
@@ -704,7 +777,8 @@ def race_state(race_id):
                    if started else course_len,
             "finished_at": rb["finished_at"],
             "started": started, "has_route": None, "maneuvers": None,
-            "track": [[p["lat"], p["lon"]] for p in _decimate(trk)],
+            "track": pts(rtracks.get(rb["id"], ())),
+            "track_n": m["n"] if m else 0, "last_t": m["last_t"] if m else None,
         })
 
     def sort_key(e):
@@ -717,14 +791,38 @@ def race_state(race_id):
     for i, e in enumerate(entries):
         e["rank"] = i + 1
 
-    return jsonify({"now": now, "start_time": r["start_time"],
-                    "fleet_gate": fleet_gate(db, r),
-                    "virtual_start": virtual_start(db, r),
-                    "course_len_nm": course_len,
-                    "marks": [{"name": m["name"], "lat": m["lat"], "lon": m["lon"]}
-                              for m in marks],
-                    "weather": wind_health(db, now, race_bbox(db, race_id)),
-                    "entries": entries})
+    return {"now": now, "start_time": r["start_time"],
+            "fleet_gate": fleet_gate(db, r),
+            "virtual_start": virtual_start(db, r),
+            "course_len_nm": course_len,
+            "marks": [{"name": m["name"], "lat": m["lat"], "lon": m["lon"]}
+                      for m in marks],
+            "weather": wind_health(db, now, race_bbox(db, race_id)),
+            "delta": since is not None, "since": since,
+            "entries": entries}
+
+
+@app.get("/api/races/<int:race_id>/state")
+def race_state(race_id):
+    """Fleet positions, tracks and the leaderboard. With ?since=<unix t>
+    each entry's track holds only fixes newer than that (the client keeps
+    the rest); without it the full, thinned tracks come back, from the
+    per-tick cache while the ticker runs."""
+    db = get_db()
+    r = _race_or_404(db, race_id)
+    if not r:
+        return _err("race not found", 404)
+    since = request.args.get("since", type=int)
+    now = int(time.time())
+    if since is None and _ticker_started:
+        hit = _state_cache.get(race_id)
+        if hit and time.time() - hit[0] < STATE_CACHE_SECONDS:
+            return jsonify(hit[1])
+    _freshen(db, race_id, now)
+    payload = _build_state(db, r, now, since)
+    if since is None and _ticker_started:
+        _state_cache[race_id] = (time.time(), payload)
+    return jsonify(payload)
 
 
 # ---------- race documents & auto-creation ----------------------------------
@@ -916,6 +1014,7 @@ def register_boat(race_id):
     except Exception:
         return _err(f"There is already a {name} in this race. Choose another name.", 409)
     db.commit()
+    _invalidate_state(race_id)
     return jsonify({"boat_id": cur.lastrowid})
 
 
@@ -1076,6 +1175,7 @@ def submit_route(boat_id):
             db.commit()
     except SimBusy as e:
         return _err(str(e), 503)
+    _invalidate_state(race["id"])
     return jsonify({"ok": True, "waypoints": len(wps),
                     "adjustments": adjustments,
                     "waiting_for_fleet": waiting,
@@ -1443,6 +1543,7 @@ def _tick():
         except Exception:
             log.exception("fleet gate failed for race %s", r["id"])
         catch_up_race(db, r["id"], now, max_steps=MAX_STEPS_PER_TICK)
+        _invalidate_state(r["id"])
 
     # placeholder weather is refetched from here, on the cooldown, whether or
     # not a boat happens to cross the cell again
