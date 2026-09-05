@@ -85,6 +85,33 @@ def parse_time(s):
         return None
 
 
+def fix_time(meta, body, now=None):
+    """When the position was actually taken, as a unix second.
+
+    A position report carries no full timestamp of its own, only the UTC
+    second (0-59) at which the fix was generated ('Timestamp'; 60 and above
+    mean unavailable). aisstream's MetaData.time_utc is when the report was
+    received ashore, seconds to a minute later for a boat heard through a
+    satellite or an aggregator. So the receipt time is snapped back to the
+    report's second: the latest minute in which that second is not after
+    the receipt. Without a receipt time the wall clock is the best there
+    is; without a usable second the receipt time stands."""
+    t = parse_time((meta or {}).get("time_utc"))
+    if t is None:
+        return int(now or time.time())
+    try:
+        sec = int((body or {}).get("Timestamp"))
+    except (TypeError, ValueError):
+        return t
+    if not 0 <= sec <= 59:
+        return t
+    base = t - t % 60
+    fix = base + sec
+    if fix > t + 2:                     # allow a couple of seconds of clock skew
+        fix -= 60
+    return fix
+
+
 def report_position(meta, body):
     """Where a position report puts the boat.  aisstream's MetaData spells it
     'latitude' / 'longitude' — lower case, unlike every other key in the
@@ -257,7 +284,7 @@ class AISFeed(threading.Thread):
         if lat is None:
             return 0
         sog = report_sog(body)
-        t = parse_time(meta.get("time_utc")) or int(time.time())
+        t = fix_time(meta, body)
         stored = 0
         for race in races:
             box = race_box(marks[race["id"]])
