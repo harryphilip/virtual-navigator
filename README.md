@@ -71,9 +71,9 @@ through real historical wind.
 - **No time travel.** Boat state only ever advances. When you update your
   routing, the server first simulates your boat up to *now* under the old
   plan; everything sailed is locked, and only not-yet-reached waypoints are
-  replaced. Entries close at the gun: a boat must be entered and hold a
-  route by the start, or it does not start. Every submission is timestamped
-  in an audit log.
+  replaced. Entries close at the scheduled start, postponed real fleet or
+  not: a boat must be entered and hold a route by then, or it does not
+  start. Every submission is timestamped in an audit log.
 - **Virtual boats start when the real fleet does.** In a race with a tracked
   real fleet, virtual boats wait on the line until 5% of the real boats have
   been seen under way after the gun (`fleet_start_pct`, `vn/fleetgate.py`),

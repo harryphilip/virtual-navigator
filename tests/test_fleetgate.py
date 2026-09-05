@@ -31,12 +31,15 @@ def fix(db, race_id, name, t, lat=0.0, lon=0.0):
     db.commit()
 
 
-def api_race_with_fleet(db, n_real):
+def api_race_with_fleet(db, n_real, first_route=None):
     """A race made through the API (so it carries the column default) plus a
-    real fleet, and a navigator with a boat in it."""
+    real fleet, and a navigator with a boat in it. The boat is entered (and
+    given `first_route`, if any) before the gun, which is then moved two
+    hours into the past: entries close at the scheduled start, so anything
+    that must happen before it happens here."""
     admin = new_client("admin")
     r = admin.post("/api/races", json={
-        "name": "Gated", "start_time": int(time.time()) - 2 * H,
+        "name": "Gated", "start_time": int(time.time()) + H,
         "polar_text": POLAR_40FT, "currents_enabled": False,
         "marks": [{"name": "Start", "lat": 0.0, "lon": 0.0},
                   {"name": "Finish", "lat": -0.5, "lon": 0.0}]})
@@ -46,7 +49,13 @@ def api_race_with_fleet(db, n_real):
     db.commit()
     nav = new_client("nav")
     boat = nav.post(f"/api/races/{race_id}/boats", json={"name": "Magpie"}).get_json()["boat_id"]
-    return race_id, nav, boat
+    resp = None
+    if first_route is not None:
+        resp = nav.post(f"/api/boats/{boat}/route", json={"waypoints": first_route})
+        assert resp.status_code == 200, resp.get_json()
+    db.execute("UPDATE races SET start_time=? WHERE id=?", (int(time.time()) - 2 * H, race_id))
+    db.commit()
+    return race_id, nav, boat, resp
 
 
 # ---- the gate itself ----------------------------------------------------
@@ -115,10 +124,11 @@ def test_open_gate_records_the_start_once_and_sends_waiting_boats_off(db):
 # ---- through the API ------------------------------------------------------
 
 def test_first_routing_waits_on_the_line_until_the_fleet_starts(client, db):
-    race_id, nav, boat = api_race_with_fleet(db, 40)
-    r = nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]})
-    assert r.status_code == 200
+    race_id, nav, boat, r = api_race_with_fleet(db, 40, first_route=[[-0.5, 0.0]])
     assert r.get_json()["waiting_for_fleet"]["needed"] == 2
+    # the gun has passed and the fleet is still held: the route can be changed
+    r = nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]})
+    assert r.status_code == 200 and r.get_json()["waiting_for_fleet"] is not None
     state = client.get(f"/api/races/{race_id}/state").get_json()
     me = [e for e in state["entries"] if e["name"] == "Magpie"][0]
     assert me["started"] is False and me["has_route"] is True
@@ -141,10 +151,12 @@ def test_first_routing_waits_on_the_line_until_the_fleet_starts(client, db):
     assert detail["virtual_start"] == gun + H + 300 and detail["fleet_start_pct"] == 5
 
 
-def test_first_routing_after_the_gate_opened_is_refused(client, db):
-    """Entries close when the virtual fleet starts. A boat entered before
-    the gun that still holds no route when the gate opens did not start."""
-    race_id, nav, boat = api_race_with_fleet(db, 40)
+def test_first_routing_after_the_scheduled_start_is_refused(client, db):
+    """Entries close at the scheduled start. A boat entered before it that
+    holds no route by then did not start, gate or no gate."""
+    race_id, nav, boat, _ = api_race_with_fleet(db, 40)
+    r = nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]})
+    assert r.status_code == 409 and "never started" in r.get_json()["error"]
     gun = race_row(db, race_id)["start_time"]
     fix(db, race_id, "R0", gun + 60)
     fix(db, race_id, "R1", gun + 120)
@@ -156,7 +168,7 @@ def test_first_routing_after_the_gate_opened_is_refused(client, db):
 
 
 def test_boats_already_sailing_are_not_moved_when_the_gate_opens(client, db):
-    race_id, nav, boat = api_race_with_fleet(db, 40)
+    race_id, nav, boat, _ = api_race_with_fleet(db, 40)
     gun = race_row(db, race_id)["start_time"]
     # a boat that started at the gun before the gate existed
     db.execute("UPDATE boats SET sim_time=?, lat=0, lon=0, next_mark=1 WHERE id=?", (gun, boat))
