@@ -35,6 +35,7 @@
         <dt>Course</dt><dd id="rh_course"></dd>
         <dt>Polar</dt><dd id="rh_polar"></dd>
         <dt>Fleet</dt><dd id="rh_fleet"></dd>
+        <dt id="rh_results_dt" style="display:none">Results</dt><dd id="rh_results" style="display:none"></dd>
       </dl>
     </div>
 
@@ -184,6 +185,25 @@
       <div id="docs_list" class="small"></div>
     </div>
 
+    <div class="card" id="results_card" style="display:none">
+      <h2>Import official results</h2>
+      <p class="small muted" style="margin:2px 0 8px">Committee only. Give the Yacht Scoring
+        event (its emenu number, or the whole URL), or paste a CSV with boat, finish, elapsed,
+        corrected and status columns. Preview first; nothing is written until you apply.</p>
+      <form id="f_results" novalidate>
+        <label for="res_source">Yacht Scoring event or URL</label>
+        <input id="res_source" placeholder="yachtscoring:50775" autocomplete="off">
+        <label for="res_csv">…or paste CSV</label>
+        <textarea id="res_csv" rows="3" placeholder="Boat,Sail,Finish,Elapsed,Corrected,Status"></textarea>
+        <div class="row actions">
+          <button type="submit" class="ghost">Preview</button>
+          <button type="button" id="res_apply" disabled>Apply to the leaderboard</button>
+        </div>
+        <div class="msg" id="res_msg" aria-live="polite"></div>
+        <div id="res_preview" class="small table-scroll"></div>
+      </form>
+    </div>
+
     <div class="card" id="log_card" style="display:none">
       <h2>Committee log</h2>
       <p class="small muted" style="margin:2px 0 8px">
@@ -299,6 +319,7 @@ const planLayer = L.layerGroup().addTo(map);
 const drawLayer = L.layerGroup().addTo(map);
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+function ordinal(n) { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return s[(v - 20) % 10] || s[v] || s[0]; }
 function fmt1(x) { return x == null ? '—' : (Math.round(x * 10) / 10).toFixed(1); }
 async function api(path, opts) {
   const res = await fetch(path, opts);
@@ -323,6 +344,12 @@ async function loadRace() {
   document.getElementById('rh_polar').textContent =
     `${race.polar_name} at ${Math.round(race.perf_factor * 100)}%`;
   document.getElementById('rh_course').textContent = `${race.marks.length} marks`;
+  if (race.results) {
+    document.getElementById('rh_results_dt').style.display = '';
+    const dd = document.getElementById('rh_results');
+    dd.style.display = '';
+    dd.textContent = `Official, imported ${vnTime(race.results.at)} (${race.results.source})`;
+  }
   document.getElementById('r_perf').textContent = Math.round(race.perf_factor * 100) + '%';
   document.getElementById('r_step').textContent = 'every ' + race.step_minutes + ' min';
   document.getElementById('r_cur').textContent =
@@ -616,8 +643,11 @@ function drawLeaderboard() {
   const row = (e, rank) => {
     const tr = document.createElement('tr');
     const mine = my && e.type === 'virtual' && e.id === my.boatId;
-    const badge = e.finished_at
-      ? '<span class="badge fin">finished</span>'
+    const o = e.official;
+    const badge = o && o.status !== 'FIN'
+      ? `<span class="badge" title="official result">${esc(o.status)}</span>`
+      : e.finished_at
+      ? `<span class="badge fin" title="${o ? 'official finish time' : 'finish seen on the tracker'}">finished${o ? ' ·' : ''}${o && o.place_class ? ' ' + o.place_class + ordinal(o.place_class) : ''}</span>`
       : !e.started ? '<span class="badge">not started</span>'
       : e.type === 'real' ? `<span class="badge real">${esc(e.klass)}</span>`
       : '<span class="badge virtual">virtual</span>';
@@ -809,6 +839,7 @@ async function showManage() {
     'Follow the fleet here, and enter the next race before its gun.';
   document.getElementById('mb_manage').style.display = (me && my) ? 'block' : 'none';
   document.getElementById('mb_title').textContent = (me && my) ? 'My boat' : open ? 'Enter this race' : 'Entries closed';
+  document.getElementById('results_card').style.display = (me && me.is_admin) ? 'block' : 'none';
   if (my) {
     document.getElementById('mb_course').href = `/api/races/${raceId}/course.gpx`;
     document.getElementById('mb_polar').href = `/api/races/${raceId}/polar`;
@@ -817,6 +848,37 @@ async function showManage() {
     document.getElementById('mb_profile').href = `/user?u=${encodeURIComponent(me.username)}`;
   }
 }
+
+/* official results: committee only */
+let resPreview = null;
+async function postResults(apply) {
+  const msg = document.getElementById('res_msg');
+  const body = { apply };
+  const csv = document.getElementById('res_csv').value.trim();
+  if (csv) body.csv = csv; else body.source = document.getElementById('res_source').value.trim();
+  if (!body.csv && !body.source) { msg.className = 'msg err'; msg.textContent = 'Give an event or paste CSV.'; return; }
+  msg.className = 'msg'; msg.textContent = apply ? 'Applying…' : 'Reading results…';
+  try {
+    const j = await api(`/api/races/${raceId}/results`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    resPreview = j;
+    const row = m => `<tr><td>${esc(m.boat)}</td><td>${esc(m.result.name)}</td><td>${esc(m.result.status)}</td>` +
+      `<td>${m.result.finish_at ? vnTime(m.result.finish_at) : '—'}</td><td>${m.result.elapsed_s != null ? fmtDur(m.result.elapsed_s / 3600) : '—'}</td></tr>`;
+    document.getElementById('res_preview').innerHTML =
+      `<table class="list"><thead><tr><th>Roster</th><th>Result row</th><th>Status</th><th>Finish</th><th>Elapsed</th></tr></thead><tbody>` +
+      j.matched.map(row).join('') + '</tbody></table>' +
+      (j.unmatched_results.length ? `<div class="muted" style="margin-top:6px">No roster boat for: ${j.unmatched_results.map(r => esc(r.name)).join(', ')}</div>` : '') +
+      (j.unmatched_roster.length ? `<div class="muted">No result for: ${j.unmatched_roster.map(r => esc(r.boat)).join(', ')}</div>` : '');
+    msg.className = 'msg ok';
+    msg.textContent = j.applied
+      ? `Applied: ${j.summary.finishers} finishers, ${j.summary.non_finishers} scored RET, DNF or DNS.`
+      : `${j.matched.length} of ${j.rows} result rows match the roster. Check the table, then apply.`;
+    document.getElementById('res_apply').disabled = j.applied || !j.matched.length;
+    if (j.applied) { await loadRace(); await refresh(); loadLog(); }
+  } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+}
+document.getElementById('f_results').onsubmit = ev => { ev.preventDefault(); postResults(false); };
+document.getElementById('res_apply').onclick = () => postResults(true);
 
 let myFix = null;
 async function refreshFix() {

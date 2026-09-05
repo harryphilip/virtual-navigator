@@ -184,6 +184,16 @@ MIGRATIONS = [
     "ALTER TABLE races ADD COLUMN fleet_start_pct REAL DEFAULT 5",   # virtual start waits for this share of the real fleet
     "ALTER TABLE races ADD COLUMN virtual_start INTEGER",            # when it did, once known
     "CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email) WHERE email IS NOT NULL",
+    # the committee's official results for the real fleet (vn/results.py)
+    "ALTER TABLE real_boats ADD COLUMN official_status TEXT",       # FIN | RET | DNF | DNS | DSQ ...
+    "ALTER TABLE real_boats ADD COLUMN official_finish INTEGER",
+    "ALTER TABLE real_boats ADD COLUMN official_elapsed_s INTEGER",
+    "ALTER TABLE real_boats ADD COLUMN official_corrected_s INTEGER",
+    "ALTER TABLE real_boats ADD COLUMN official_place INTEGER",
+    "ALTER TABLE real_boats ADD COLUMN official_place_overall INTEGER",
+    "ALTER TABLE real_boats ADD COLUMN official_class TEXT",
+    "ALTER TABLE races ADD COLUMN results_source TEXT",
+    "ALTER TABLE races ADD COLUMN results_at INTEGER",
 ]
 
 

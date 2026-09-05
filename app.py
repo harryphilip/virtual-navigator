@@ -17,7 +17,7 @@ from flask import Flask, jsonify, request, send_from_directory, Response
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from vn import ais, mail, yb
+from vn import ais, mail, results, yb
 from vn.compare import CompareError, compare
 from vn.db import add_race_log, get_db
 from vn.fleetgate import fleet_gate, open_gate, stamp, virtual_start
@@ -628,7 +628,69 @@ def race_detail(race_id):
                     "fleet_gate": fleet_gate(db, r),
                     "virtual_start": virtual_start(db, r),
                     "entries_open": _entries_open(db, r, int(time.time())),
-                    "entries_close_at": _entries_close_at(db, r)})
+                    "entries_close_at": _entries_close_at(db, r),
+                    "results": ({"source": r["results_source"], "at": r["results_at"]}
+                                if r["results_at"] else None)})
+
+
+def _official(rb):
+    if not rb["official_status"]:
+        return None
+    return {"status": rb["official_status"], "finish_at": rb["official_finish"],
+            "elapsed_s": rb["official_elapsed_s"], "corrected_s": rb["official_corrected_s"],
+            "place_class": rb["official_place"], "place_overall": rb["official_place_overall"],
+            "klass": rb["official_class"]}
+
+
+@app.get("/api/races/<int:race_id>/results")
+def race_results(race_id):
+    """The committee's results as imported: every real boat with a status."""
+    db = get_db()
+    r = _race_or_404(db, race_id)
+    if not r:
+        return _err("race not found", 404)
+    boats = []
+    for rb in db.execute("SELECT * FROM real_boats WHERE race_id=? AND official_status IS NOT NULL "
+                         "ORDER BY (official_finish IS NULL), official_finish, official_place",
+                         (race_id,)):
+        o = _official(rb)
+        o["boat"] = rb["name"]
+        o["sail_no"] = rb["sail_no"]
+        boats.append(o)
+    return jsonify({"source": r["results_source"], "at": r["results_at"], "boats": boats})
+
+
+@app.post("/api/races/<int:race_id>/results")
+def import_results(race_id):
+    """Admin: preview or apply official results. Body: {"source":
+    "yachtscoring:<eventId>[#race]"} or {"csv": "..."}; add "apply": true
+    to write what the preview showed."""
+    db = get_db()
+    r, err = _auth_admin(db, race_id)
+    if err:
+        return err
+    d = request.get_json(force=True)
+    try:
+        if d.get("csv"):
+            rows = results.parse_csv(d["csv"])
+            label = "pasted CSV"
+        else:
+            kind, event, race_no = results.parse_source(d.get("source"))
+            rows = results.fetch_yachtscoring(event, race_no)
+            label = f"yachtscoring:{event}#{race_no}"
+    except ValueError as e:
+        return _err(str(e))
+    except Exception as e:
+        log.exception("results fetch failed for race %s", race_id)
+        return _err(f"Could not read the results: {e}", 502)
+    matches, unmatched, roster_left = results.match_roster(db, race_id, rows)
+    out = results.preview_json(matches, unmatched, roster_left)
+    out.update({"source": label, "rows": len(rows), "applied": False})
+    if d.get("apply"):
+        out["summary"] = results.apply_results(db, r, matches, label)
+        out["applied"] = True
+        _invalidate_state(race_id)
+    return jsonify(out)
 
 
 @app.get("/api/races/<int:race_id>/polar")
@@ -834,6 +896,7 @@ def _build_state(db, r, now, since=None):
             "dtf": dtf_nm(rb["last_lat"], rb["last_lon"], marks, rb["next_mark"])
                    if started else course_len,
             "finished_at": rb["finished_at"],
+            "official": _official(rb),
             "started": started, "has_route": None, "maneuvers": None,
             "track": pts(rtracks.get(rb["id"], ())),
             "track_n": m["n"] if m else 0, "last_t": m["last_t"] if m else None,
