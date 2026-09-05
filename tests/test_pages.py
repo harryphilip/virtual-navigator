@@ -5,6 +5,7 @@ import pytest
 @pytest.mark.parametrize("path,needle", [
     ("/", "Route the real race"),
     ("/race", "Enter this race"),
+    ("/race", "Official results"),
     ("/user", "Route history"),
     ("/how", "How the race is sailed"),
     ("/reset", "Choose a new password"),

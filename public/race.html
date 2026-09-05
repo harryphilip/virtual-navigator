@@ -163,6 +163,18 @@
       </div>
     </div>
 
+    <div class="card" id="official_card" style="display:none">
+      <h2>Official results</h2>
+      <div class="small muted" id="official_meta" style="margin:-4px 0 8px"></div>
+      <div class="table-scroll">
+        <table class="list" id="official_tbl">
+          <thead><tr><th>#</th><th>Boat</th><th>Class</th><th>Finish</th><th>Elapsed</th><th>Corrected</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="official_virtual" class="small" style="margin-top:10px"></div>
+    </div>
+
     <details class="card" id="cmp_card" style="display:none">
       <summary>Why the gap?</summary>
       <p class="small muted" style="margin:2px 0 8px">
@@ -349,6 +361,7 @@ async function loadRace() {
     const dd = document.getElementById('rh_results');
     dd.style.display = '';
     dd.textContent = `Official, imported ${vnTime(race.results.at)} (${race.results.source})`;
+    loadResults();
   }
   document.getElementById('r_perf').textContent = Math.round(race.perf_factor * 100) + '%';
   document.getElementById('r_step').textContent = 'every ' + race.step_minutes + ' min';
@@ -503,6 +516,7 @@ async function refresh() {
   const q = full ? '' : `?since=${Math.min(...known)}`;
   state = await api(`/api/races/${raceId}/state${q}`);
   mergeTracks(state);
+  renderVirtualVsOfficial();
   const warn = document.getElementById('wx_warn');
   if (state.weather && state.weather.degraded) {
     warn.textContent = 'Weather feed down. Some wind cells are placeholder data until the ' +
@@ -747,6 +761,70 @@ async function runCompare() {
 function fmtDur(h) {
   const m = Math.round(Math.abs(h) * 60);
   return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+}
+/* elapsed and corrected times the way a results sheet prints them: 1d 02:12:04 */
+function fmtElapsed(sec) {
+  if (sec == null) return '—';
+  const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600),
+    m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60), p = n => String(n).padStart(2, '0');
+  return `${d ? d + 'd ' : ''}${p(h)}:${p(m)}:${p(s)}`;
+}
+
+/* ---------------- official results: the committee's finish order ---------------- */
+let officialRows = null;
+async function loadResults() {
+  try {
+    const res = await api(`/api/races/${raceId}/results`);
+    officialRows = res.boats;
+  } catch (e) { return; }
+  const card = document.getElementById('official_card');
+  if (!officialRows.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  const finishers = officialRows.filter(b => b.status === 'FIN' && b.finish_at != null)
+    .sort((a, b) => a.finish_at - b.finish_at);
+  const others = officialRows.filter(b => !(b.status === 'FIN' && b.finish_at != null));
+  const classes = new Set(officialRows.map(b => b.klass).filter(Boolean));
+  document.getElementById('official_meta').textContent =
+    `${finishers.length} finished · ${others.length} scored RET, DNF or DNS · ` +
+    `${classes.size} class${classes.size === 1 ? '' : 'es'} · finish order, with each boat's place in its class`;
+  const tb = document.querySelector('#official_tbl tbody');
+  tb.innerHTML = finishers.map((b, i) => `<tr>
+      <td>${i + 1}</td>
+      <td>${esc(b.boat)}${b.sail_no ? ` <span class="muted">${esc(b.sail_no)}</span>` : ''}</td>
+      <td>${esc(b.klass || '')}${b.place_class ? ` <span class="muted">· ${b.place_class}${ordinal(b.place_class)}</span>` : ''}</td>
+      <td>${vnTime(b.finish_at)}</td><td>${fmtElapsed(b.elapsed_s)}</td><td>${fmtElapsed(b.corrected_s)}</td></tr>`).join('') +
+    others.map(b => `<tr class="muted">
+      <td></td><td>${esc(b.boat)}</td><td>${esc(b.klass || '')}</td>
+      <td><span class="badge">${esc(b.status)}</span></td><td>—</td><td>—</td></tr>`).join('');
+  renderVirtualVsOfficial();
+}
+function renderVirtualVsOfficial() {
+  const box = document.getElementById('official_virtual');
+  if (!officialRows || !state) return;
+  const start = state.virtual_start || state.start_time;
+  const elapsedReal = officialRows.filter(b => b.status === 'FIN' && b.elapsed_s != null)
+    .map(b => b.elapsed_s).sort((a, b) => a - b);
+  const virts = state.entries.filter(e => e.type === 'virtual' && e.finished_at)
+    .map(e => ({ ...e, elapsed_s: e.finished_at - start }))
+    .sort((a, b) => a.elapsed_s - b.elapsed_s);
+  if (!virts.length) {
+    box.innerHTML = '<span class="muted">No virtual boat has finished yet. Elapsed times here are on the ' +
+      'real fleet\'s clock; a virtual finish is compared on elapsed time only, since virtual boats carry no rating.</span>';
+    return;
+  }
+  const rows = virts.map(v => {
+    const ahead = elapsedReal.filter(t => t < v.elapsed_s).length;
+    const mine = my && v.id === my.boatId;
+    return `<tr${mine ? ' style="color:var(--accent);font-weight:650"' : ''}>
+      <td>${esc(v.name)}${mine ? ' ◂' : ''}</td><td>${vnTime(v.finished_at)}</td>
+      <td>${fmtElapsed(v.elapsed_s)}</td>
+      <td>${ahead + 1}${ordinal(ahead + 1)} of ${elapsedReal.length + 1} on elapsed time</td></tr>`;
+  }).join('');
+  box.innerHTML = '<h3>Virtual fleet against the real boats</h3>' +
+    '<div class="table-scroll"><table class="list"><thead><tr><th>Boat</th><th>Finish</th><th>Elapsed</th><th>Against the real fleet</th></tr></thead>' +
+    `<tbody>${rows}</tbody></table></div>` +
+    '<div class="muted" style="margin-top:4px">Elapsed time only: virtual boats sail one polar and carry no rating, ' +
+    'so corrected time does not apply to them.</div>';
 }
 function fmtSigned(h) {
   const m = Math.round(Math.abs(h) * 60);
