@@ -206,3 +206,31 @@ def test_set_fleet_gate_off_sends_waiting_boats_off(db):
     assert fleetgate.fleet_gate(db, race_row(db, race_id)) is None
     t = db.execute("SELECT sim_time FROM boats WHERE id=?", (boat,)).fetchone()[0]
     assert t is not None and t >= int(time.time()) - 5
+
+
+def test_set_virtual_start_by_hand_and_back_to_auto(db):
+    import importlib
+    race_id = race_with_fleet(db, 40, start_time=1000)
+    fix(db, race_id, "R0", 5000)
+    fix(db, race_id, "R1", 6000)                    # the feed came back late: gate says 6000
+    assert fleetgate.virtual_start(db, race_row(db, race_id)) == 6000
+    svs = importlib.import_module("scripts.set_virtual_start")
+    svs.main([str(race_id), "1970-01-01T00:20:00Z"])          # t = 1200, from the scratch sheet
+    assert race_row(db, race_id)["virtual_start"] == 1200
+    assert fleetgate.virtual_start(db, race_row(db, race_id)) == 1200
+    assert fleetgate.open_gate(db, race_row(db, race_id)) is None     # decided: stays
+    svs.main([str(race_id), "auto"])
+    assert race_row(db, race_id)["virtual_start"] is None
+    assert fleetgate.virtual_start(db, race_row(db, race_id)) == 6000
+    log = db.execute("SELECT message FROM race_log WHERE race_id=? ORDER BY id DESC",
+                     (race_id,)).fetchone()["message"]
+    assert "fleet gate again" in log
+
+
+def test_set_virtual_start_refuses_a_time_before_the_gun(db):
+    import importlib, pytest
+    race_id = race_with_fleet(db, 40, start_time=1000)
+    svs = importlib.import_module("scripts.set_virtual_start")
+    with pytest.raises(SystemExit):
+        svs.main([str(race_id), "1970-01-01T00:10:00Z"])
+    assert race_row(db, race_id)["virtual_start"] is None
