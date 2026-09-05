@@ -149,14 +149,46 @@ def test_entries_close_at_the_gun(client, db):
     assert detail["entries_open"] is False and detail["entries_close_at"] == detail["start_time"]
     r = late.post(f"/api/races/{race}/boats", json={"name": "Latecomer"})
     assert r.status_code == 409 and "Entries closed" in r.get_json()["error"]
-    # entered before the gun but never routed: did not start
+    # entered before the gun but never routed: started on the default course
+    # by the ticker, and the navigator's first submission is an ordinary update
     r = nav.post(f"/api/boats/{idle}/route", json={"waypoints": [[-0.5, 0.0]]})
-    assert r.status_code == 409 and "never started" in r.get_json()["error"]
+    assert r.status_code == 200
+    assert db.execute("SELECT sim_time FROM boats WHERE id=?", (idle,)).fetchone()["sim_time"] is not None
+    assert "Idle had no route at the start" in db.execute(
+        "SELECT message FROM race_log WHERE race_id=? ORDER BY id DESC", (race,)).fetchone()["message"]
     # a boat that was on the line at the gun sails on and can still update its route
     assert nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.3, 0.1], [-0.5, 0.0]]}).status_code == 200
     state = client.get(f"/api/races/{race}/state").get_json()
     assert state["entries_open"] is False
-    assert [e["name"] for e in state["entries"] if e["started"]] == ["Magpie"]
+    assert sorted(e["name"] for e in state["entries"] if e["started"]) == ["Idle", "Magpie"]
+
+
+def test_the_ticker_gives_unrouted_boats_the_straight_line_course(client, db, weather):
+    """An ungated race: at the gun every routeless entry gets mark-to-mark
+    legs, sided marks rounded, and starts with the fleet."""
+    import app as appmod
+    from vn.geo import haversine_nm
+    admin = new_client("admin")
+    marks = [{"name": "Start", "lat": 0.0, "lon": 0.0},
+             {"name": "Turn", "lat": 0.0, "lon": 0.5, "side": "stbd"},
+             {"name": "Finish", "lat": 0.0, "lon": 1.0}]
+    race = admin.post("/api/races", json=race_body(marks=marks)).get_json()["id"]
+    nav = new_client("nav")
+    boat = nav.post(f"/api/races/{race}/boats", json={"name": "Dockside"}).get_json()["boat_id"]
+    appmod._tick()                                             # before the gun: nothing
+    assert db.execute("SELECT COUNT(*) c FROM route_wps WHERE boat_id=?", (boat,)).fetchone()["c"] == 0
+    sail_from(db, race, 3600)
+    appmod._tick()
+    route = nav.get(f"/api/boats/{boat}").get_json()["route"]
+    assert route[-1] == [0.0, 1.0]                             # ends at the finish
+    near = [p for p in route if haversine_nm(p[0], p[1], 0.0, 0.5) <= 2.0]
+    assert near and max(p[0] for p in near) > 0.01             # rounds the turn to starboard
+    b = db.execute("SELECT * FROM boats WHERE id=?", (boat,)).fetchone()
+    assert b["sim_time"] is not None and b["lat"] is not None
+    assert db.execute("SELECT COUNT(*) c FROM route_log WHERE boat_id=?", (boat,)).fetchone()["c"] == 1
+    state = client.get(f"/api/races/{race}/state").get_json()
+    me = [e for e in state["entries"] if e["name"] == "Dockside"][0]
+    assert me["started"] and me["has_route"]
 
 
 def test_a_postponed_real_fleet_does_not_reopen_entries(client, db):

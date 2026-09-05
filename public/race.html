@@ -861,8 +861,8 @@ async function refreshMine() {
         (g ? ` (${g.started} of ${g.needed} boats under way).` : '.'));
   } else if (b.sim_time == null) {
     st.innerHTML = `<b>${esc(b.name)}</b> · ` + (state && state.entries_open === false
-      ? 'Entered, but no route by the scheduled start: this boat did not start.'
-      : 'No route yet. Submit one before the gun and the boat starts with the fleet.');
+      ? 'No route by the scheduled start: the boat sails the straight-line course through each mark until you submit one.'
+      : 'No route yet. Submit one before the gun; a boat without one sails the straight-line course through each mark.');
   } else {
     st.innerHTML = `<b>${esc(b.name)}</b> · ${b.dtf == null ? '' : Math.round(b.dtf) + ' nm to go · '}` +
       `${b.maneuvers} tacks/gybes` +

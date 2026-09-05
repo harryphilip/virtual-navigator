@@ -151,20 +151,26 @@ def test_first_routing_waits_on_the_line_until_the_fleet_starts(client, db):
     assert detail["virtual_start"] == gun + H + 300 and detail["fleet_start_pct"] == 5
 
 
-def test_first_routing_after_the_scheduled_start_is_refused(client, db):
-    """Entries close at the scheduled start. A boat entered before it that
-    holds no route by then did not start, gate or no gate."""
+def test_unrouted_boat_gets_the_default_course_and_waits_for_the_gate(client, db):
+    """Entered, no route by the scheduled start, fleet not yet under way:
+    the boat is given the straight-line course and waits on the line."""
+    import app as appmod
     race_id, nav, boat, _ = api_race_with_fleet(db, 40)
-    r = nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]})
-    assert r.status_code == 409 and "never started" in r.get_json()["error"]
+    assert client.get(f"/api/races/{race_id}").get_json()["entries_open"] is False
+    appmod._tick()
+    mine = nav.get(f"/api/boats/{boat}").get_json()
+    assert mine["route"] == [[-0.5, 0.0]] and mine["sim_time"] is None       # waiting for the fleet
+    log = db.execute("SELECT message FROM race_log WHERE race_id=? ORDER BY id DESC",
+                     (race_id,)).fetchone()["message"]
+    assert "Magpie had no route at the start" in log
+    # the navigator can still replace it while the fleet is held
+    r = nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.3, 0.1], [-0.5, 0.0]]})
+    assert r.status_code == 200 and r.get_json()["waiting_for_fleet"] is not None
     gun = race_row(db, race_id)["start_time"]
     fix(db, race_id, "R0", gun + 60)
     fix(db, race_id, "R1", gun + 120)
-    r = nav.post(f"/api/boats/{boat}/route", json={"waypoints": [[-0.5, 0.0]]})
-    assert r.status_code == 409 and "never started" in r.get_json()["error"]
-    mine = nav.get(f"/api/boats/{boat}").get_json()
-    assert mine["sim_time"] is None
-    assert client.get(f"/api/races/{race_id}").get_json()["entries_open"] is False
+    client.get(f"/api/races/{race_id}/state")
+    assert nav.get(f"/api/boats/{boat}").get_json()["sim_time"] >= gun + 120
 
 
 def test_boats_already_sailing_are_not_moved_when_the_gate_opens(client, db):
