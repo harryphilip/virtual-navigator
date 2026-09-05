@@ -229,18 +229,24 @@ git push                          # tests run in CI, then main is deployed
 ```
 
 Production (`virtual-navigator` on Fly.io) is deployed by one road only: the
-GitHub Action in `.github/workflows/deploy.yml`, from `main`, after the test
-suite passes, with a volume snapshot taken first. A hand `fly deploy` from a
-laptop builds whatever happens to be in the working directory, skips the
-tests, and races the Action; don't.
+GitHub Action in `.github/workflows/deploy.yml`, from `main`. A push runs
+the test suite, deploys the **staging app** (`virtual-navigator-staging`),
+smoke-tests it with `scripts/smoke.sh` (healthy, every page answering, and
+`/healthz` reporting that exact commit), then snapshots the production
+volume, deploys production, and smoke-tests that as well. A hand
+`fly deploy` from a laptop builds whatever happens to be in the working
+directory, skips all of that, and races the Action; don't.
 
 Something that can only be tried on a server (an ops script in `scripts/`,
-a tracker link, a document import) goes to the **staging app** straight from
-the branch, and is merged once it works there:
+a tracker link, a document import) goes to staging straight from the
+branch, by hand, and is merged once it works there:
 
 ```bash
 fly deploy --config fly.staging.toml     # virtual-navigator-staging
 ```
+
+Staging sleeps when idle and wakes on the first request, holds its own
+empty database, and costs nothing between uses.
 
 Rules that follow from that:
 

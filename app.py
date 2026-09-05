@@ -1754,6 +1754,7 @@ def healthz():
         else:
             ok = done_age is not None and done_age <= TICK_STALE_SECONDS
     body = {"ok": ok, "ticker": _ticker_started,
+            "version": os.environ.get("VN_VERSION", "dev"),
             "last_tick_age_s": done_age, "tick_running_for_s": started_age if _ticker_started else None,
             "weather": wind_health(db, int(now))}
     return jsonify(body), (200 if ok else 503)
