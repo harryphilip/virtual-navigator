@@ -37,7 +37,7 @@ def recompute(db, race, marks, rb_id):
     """Rebuild stored state from the full track (used after backfills)."""
     rb = db.execute("SELECT * FROM real_boats WHERE id=?", (rb_id,)).fetchone()
     db.execute("UPDATE real_boats SET last_t=NULL, last_lat=NULL, last_lon=NULL,"
-               " sog=NULL, next_mark=1, finished_at=NULL WHERE id=?", (rb_id,))
+               " sog=NULL, next_mark=1, finished_at=official_finish WHERE id=?", (rb_id,))
     rb = db.execute("SELECT * FROM real_boats WHERE id=?", (rb_id,)).fetchone()
     pts = [(r["t"], r["lat"], r["lon"]) for r in db.execute(
         "SELECT t,lat,lon FROM real_track WHERE rb_id=? ORDER BY t", (rb_id,))]
@@ -47,6 +47,9 @@ def recompute(db, race, marks, rb_id):
 def _walk(db, race, marks, rb, pts):
     next_mark = rb["next_mark"] or 1
     finished = rb["finished_at"]
+    # once the committee has spoken the finish is theirs: a fix at the mark
+    # neither moves an official finish nor gives a RET or DNS boat one
+    official = rb["official_status"] if "official_status" in rb.keys() else None
     prev = (rb["last_t"], rb["last_lat"], rb["last_lon"])
     sog = rb["sog"]
     for (t, la, lo) in pts:
@@ -54,7 +57,7 @@ def _walk(db, race, marks, rb, pts):
                 la, lo, marks[next_mark]["lat"], marks[next_mark]["lon"]
         ) <= race["mark_radius_nm"]:
             next_mark += 1
-            if next_mark >= len(marks) and finished is None:
+            if next_mark >= len(marks) and finished is None and official is None:
                 finished = t
         if prev[0] is not None and t > prev[0]:
             dt_h = (t - prev[0]) / 3600.0
