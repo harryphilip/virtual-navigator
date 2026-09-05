@@ -181,6 +181,8 @@ MIGRATIONS = [
     "ALTER TABLE real_boats ADD COLUMN sail_no TEXT",
     "ALTER TABLE track ADD COLUMN src TEXT",
     "ALTER TABLE users ADD COLUMN email TEXT",
+    "ALTER TABLE races ADD COLUMN fleet_start_pct REAL DEFAULT 5",   # virtual start waits for this share of the real fleet
+    "ALTER TABLE races ADD COLUMN virtual_start INTEGER",            # when it did, once known
     "CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email) WHERE email IS NOT NULL",
 ]
 
