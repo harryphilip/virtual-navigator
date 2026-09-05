@@ -240,9 +240,8 @@
 </main>
 
 <script src="/vendor/leaflet/leaflet.js"></script>
-<script src="/js/auth.js"></script>
+<script src="/js/vn.js"></script>
 <script>
-function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
 
 async function initAccount() {
   const u = await vnMe();
@@ -342,12 +341,6 @@ function ensureMap() {
   new ResizeObserver(() => homeMap.invalidateSize()).observe(el);
 }
 
-function until(ts) {
-  const s = ts - Date.now() / 1000;
-  if (s <= 0) return 'started';
-  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
-  return d ? `in ${d} d ${h} h` : h ? `in ${h} h ${m} min` : `in ${m} min`;
-}
 
 let fitted = false;
 async function loadRaces() {

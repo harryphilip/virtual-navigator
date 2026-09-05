@@ -8,7 +8,6 @@ tracked boats with imported positions.  Run once:
 """
 import os
 import random
-import secrets
 import sys
 import time
 
@@ -39,9 +38,9 @@ def main():
         "mark_radius_nm,polar_name,polar_text,admin_key,created_at) "
         "VALUES (?,?,?,?,?,?,?,?,?,?)",
         ("Demo: Newport–Bermuda Virtual Challenge",
-         "635 nm offshore demo. Register a boat (any name, any PIN) or sign into "
-         "a demo boat with PIN 0000. Demo admin key: demo-admin",
-         start, 0.9, 10, 5.0, "Generic 40ft offshore", polar_text, "demo-admin", now))
+         "635 nm offshore demo. Create an account and enter a boat, or claim a "
+         "demo boat with PIN 0000 from the race page (add ?claim to its URL).",
+         start, 0.9, 10, 5.0, "Generic 40ft offshore", polar_text, "", now))
     race_id = cur.lastrowid
     db.execute("INSERT INTO marks(race_id,seq,name,lat,lon) VALUES (?,?,?,?,?)",
                (race_id, 0, "Start — Castle Hill", *NEWPORT))

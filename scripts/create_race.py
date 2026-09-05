@@ -14,7 +14,6 @@ management goes through admin accounts (make_admin.py).
 import datetime as dt
 import json
 import os
-import secrets
 import sys
 import time
 
@@ -46,7 +45,6 @@ def main():
     if db.execute("SELECT 1 FROM races WHERE name=?", (d["name"],)).fetchone():
         print(f"a race named {d['name']!r} already exists — nothing done")
         sys.exit(1)
-    admin_key = secrets.token_hex(12)
     cur = db.execute(
         "INSERT INTO races(name,description,start_time,perf_factor,step_minutes,"
         "mark_radius_nm,polar_name,polar_text,admin_key,created_at,"
@@ -54,7 +52,7 @@ def main():
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (d["name"], d.get("description", ""), start,
          s["perf_factor"], s["step_minutes"], s["mark_radius_nm"],
-         d.get("polar_name", "race polar"), polar_text, admin_key, int(time.time()),
+         d.get("polar_name", "race polar"), polar_text, "", int(time.time()),
          s["maneuver_penalty_s"], s["currents_enabled"], s["grounding_depth_ft"]))
     race_id = cur.lastrowid
     for i, m in enumerate(marks):
