@@ -1,6 +1,6 @@
 {
-  "name": "Rolex Middle Sea Race 2026 — Virtual",
-  "description": "Virtual edition of the 47th Rolex Middle Sea Race: 606 nm anticlockwise around Sicily from Valletta's Grand Harbour and back. Start 09:00 UTC (11:00 local) Sat 17 Oct 2026 with the real fleet. Course: up the east coast of Sicily, through the Strait of Messina, round Stromboli, along the north coast past Capo San Vito to Favignana, then south past Pantelleria and Lampedusa and home to Malta. Marks are set just offshore of each rounding — how wide you go is your call. Polar: Class40 (meltemus.com) at 90%; everyone sails the same numbers.",
+  "name": "Malta round Sicily 606",
+  "description": "Sailed alongside the fleet of the Middle Sea Race (47th edition). 606 nm anticlockwise around Sicily from Valletta's Grand Harbour and back. Start 09:00 UTC (11:00 local) Sat 17 Oct 2026 with the real fleet. Course: up the east coast of Sicily, through the Strait of Messina, round Stromboli, along the north coast past Capo San Vito to Favignana, then south past Pantelleria and Lampedusa and home to Malta. Marks are set just offshore of each rounding — how wide you go is your call. Polar: Class40 (meltemus.com) at 90%; everyone sails the same numbers.",
   "start_time": "2026-10-17T09:00:00Z",
   "polar_name": "Class40 (meltemus.com)",
   "polar_file": "../polar_class40.pol",

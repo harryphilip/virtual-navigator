@@ -305,6 +305,15 @@ is fixed on its own branch.
 
 ## Design notes & simplifications
 
+- **Races are titled by their course, not by a brand.** "Malta round
+  Sicily 606", "Saint-Malo to Guadeloupe", "New York to Lorient". The
+  official race is named once, factually, in the first sentence of the
+  description ("Sailed alongside the fleet of the …"), which the home page
+  shows under the title; sponsors' marks appear nowhere. The definitions in
+  `data/races/*.json` are the source of truth (`tests/test_race_files.py`
+  holds the rule) and `scripts/retitle_race.py <id> <file>` applies a
+  file's title and description to a live race.
+
 - Leaflet 1.9.4 is vendored under `public/vendor/leaflet/` (BSD-2-Clause)
   so the pages do not depend on a CDN. Base map tiles come from the public
   OpenStreetMap server, whose usage policy tolerates small sites only; budget

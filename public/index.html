@@ -156,7 +156,7 @@
     <div class="row">
       <div>
         <label for="c_name">Race name</label>
-        <input id="c_name" placeholder="Rolex Middle Sea Race 2026">
+        <input id="c_name" placeholder="Malta round Sicily 606 (the course, not a sponsor's name)">
       </div>
       <div>
         <label for="c_start">Start time (UTC, ISO)</label>
@@ -398,6 +398,9 @@ async function loadRaces() {
     } else if (r.top.length) {
       body = `<div class="small muted">First home: ${esc(r.top[0].name)} · ${r.entries_total} boats</div>`;
     }
+    // The first sentence names the official race the course is sailed alongside.
+    const m = /^(Sailed alongside [^.:]+)[.:]/.exec(r.description || '');
+    const alongside = m ? m[1] : '';
     list.insertAdjacentHTML('beforeend', `
       <div class="race-item">
         <div class="race-item-head">
@@ -406,6 +409,7 @@ async function loadRaces() {
           ${r.entries_total} boat${r.entries_total === 1 ? '' : 's'} ·
           ${r.status === 'upcoming' ? 'starts' : 'started'} ${vnTime(r.start_time)}</span>
         </div>
+        ${alongside ? `<div class="small muted">${esc(alongside)}</div>` : ''}
         ${body}
       </div>`);
   });
