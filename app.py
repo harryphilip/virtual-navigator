@@ -609,12 +609,13 @@ def create_race():
     cur = db.execute(
         "INSERT INTO races(name,description,start_time,perf_factor,step_minutes,"
         "mark_radius_nm,polar_name,polar_text,admin_key,created_at,"
-        "maneuver_penalty_s,currents_enabled,grounding_depth_ft) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "maneuver_penalty_s,currents_enabled,grounding_depth_ft,docs_url) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (name, d.get("description", ""), start,
          s["perf_factor"], s["step_minutes"], s["mark_radius_nm"],
          d.get("polar_name", "race polar"), polar_text, "", int(time.time()),
-         s["maneuver_penalty_s"], s["currents_enabled"], s["grounding_depth_ft"]))
+         s["maneuver_penalty_s"], s["currents_enabled"], s["grounding_depth_ft"],
+         (d.get("docs_url") or "").strip()[:300]))
     db.execute("UPDATE races SET created_by=? WHERE id=?", (u["id"], cur.lastrowid))
     race_id = cur.lastrowid
     for i, m in enumerate(marks):
@@ -635,6 +636,7 @@ def race_detail(race_id):
               "side": mark_side(m)}
              for m in get_marks(db, race_id)]
     return jsonify({"id": r["id"], "name": r["name"], "description": r["description"],
+                    "docs_url": r["docs_url"] or "",
                     "start_time": r["start_time"], "perf_factor": r["perf_factor"],
                     "step_minutes": r["step_minutes"], "mark_radius_nm": r["mark_radius_nm"],
                     "polar_name": r["polar_name"], "marks": marks,
@@ -1122,7 +1124,13 @@ def add_race_doc(race_id):
 
 @app.get("/api/races/<int:race_id>/docs")
 def list_race_docs(race_id):
+    """Uploaded race documents are the organiser's copyright and go stale
+    when amended, so they are not republished: admins see what was
+    imported, competitors get the organiser's own page (races.docs_url)."""
     db = get_db()
+    u = current_user(db)
+    if not (u and u["is_admin"]):
+        return jsonify([])
     rows = db.execute(
         "SELECT id, kind, filename, mime, LENGTH(content) size, uploaded_at "
         "FROM race_docs WHERE race_id=? ORDER BY uploaded_at", (race_id,)).fetchall()
@@ -1132,6 +1140,10 @@ def list_race_docs(race_id):
 @app.get("/api/docs/<int:doc_id>")
 def download_doc(doc_id):
     db = get_db()
+    u = current_user(db)
+    if not (u and u["is_admin"]):
+        return _err("Race documents are not republished here; use the organiser's "
+                    "documents page linked on the race page.", 403)
     row = db.execute("SELECT * FROM race_docs WHERE id=?", (doc_id,)).fetchone()
     if not row:
         return _err("document not found", 404)

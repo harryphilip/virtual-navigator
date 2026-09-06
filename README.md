@@ -6,8 +6,9 @@ exported from your own navigation software. Every virtual boat sails the
 **same polar** through the **same real weather**, and the leaderboard ranks
 the virtual fleet alongside the **real boats on the tracker**.
 
-Live at https://virtual-navigator.fly.dev. Status: a single-server project
-run by one committee for a club-sized fleet.
+Live at https://virtual-navigator.com. Status: a single-server project
+run by one admin for a club-sized fleet, not affiliated with any race
+organiser.
 
 ## Quick start
 
@@ -162,8 +163,11 @@ Race management goes through admin accounts only.
 
 Upload the official race documents (PDF or text) on the home page and a
 virtual race is created automatically: name, start time (converted to UTC),
-and the course marks are read from the documents, which are attached to the
-race page for competitors. Two extractors:
+and the course marks are read from the documents. The uploads stay on the
+race, visible to admins only: a notice of race is the organiser's to
+publish and is amended, so competitors get a link to the organiser's own
+documents page (`docs_url` in the race JSON, `scripts/set_docs_url.py` on
+a live race) rather than a copy. Two extractors:
 
 - **Claude** (used when the server has Anthropic credentials — set
   `ANTHROPIC_API_KEY`, or sign in with `ant auth login`): the PDFs are read
