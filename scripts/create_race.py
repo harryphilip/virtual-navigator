@@ -48,12 +48,13 @@ def main():
     cur = db.execute(
         "INSERT INTO races(name,description,start_time,perf_factor,step_minutes,"
         "mark_radius_nm,polar_name,polar_text,admin_key,created_at,"
-        "maneuver_penalty_s,currents_enabled,grounding_depth_ft) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "maneuver_penalty_s,currents_enabled,grounding_depth_ft,docs_url) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (d["name"], d.get("description", ""), start,
          s["perf_factor"], s["step_minutes"], s["mark_radius_nm"],
          d.get("polar_name", "race polar"), polar_text, "", int(time.time()),
-         s["maneuver_penalty_s"], s["currents_enabled"], s["grounding_depth_ft"]))
+         s["maneuver_penalty_s"], s["currents_enabled"], s["grounding_depth_ft"],
+         d.get("docs_url", "")))
     race_id = cur.lastrowid
     for i, m in enumerate(marks):
         side = m.get("side") or None

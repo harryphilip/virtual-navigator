@@ -194,6 +194,7 @@ MIGRATIONS = [
     "ALTER TABLE real_boats ADD COLUMN official_class TEXT",
     "ALTER TABLE races ADD COLUMN results_source TEXT",
     "ALTER TABLE races ADD COLUMN results_at INTEGER",
+    "ALTER TABLE races ADD COLUMN docs_url TEXT DEFAULT ''",  # the organiser's own documents page, linked not hosted
 ]
 
 

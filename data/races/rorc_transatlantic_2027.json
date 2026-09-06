@@ -1,6 +1,7 @@
 {
   "name": "Lanzarote to Antigua",
   "description": "Sailed alongside the fleet of the RORC Transatlantic Race (13th edition): 2,995 nm from Marina Lanzarote to Antigua. Start 12:00 UTC Sun 10 Jan 2027 (real start time to be confirmed in the Notice of Race — the virtual start will match). Two marks only: how far south you dive for the trades before turning west is entirely up to you. Polar: Class40 (meltemus.com) at 90%; everyone sails the same numbers.",
+  "docs_url": "https://rorctransatlantic.rorc.org/",
   "start_time": "2027-01-10T12:00:00Z",
   "polar_name": "Class40 (meltemus.com)",
   "polar_file": "../polar_class40.pol",

@@ -29,6 +29,10 @@
       <h2>Race</h2>
       <div class="race-title" id="rh_name"></div>
       <p class="small" id="rh_desc" style="margin:6px 0 10px"></p>
+      <p class="small muted" id="rh_affil" style="margin:0 0 10px">Not affiliated with the
+        race organiser or its sponsors. Real boats are shown from the public tracker, for
+        comparison only. <a id="rh_docs" href="#" rel="noopener" style="display:none">Official
+        race documents</a></p>
       <dl class="facts small">
         <dt>Start</dt><dd id="rh_start"></dd>
         <dt>Virtual start</dt><dd id="rh_gate"></dd>
@@ -193,7 +197,9 @@
     </details>
 
     <div class="card" id="docs_card" style="display:none">
-      <h2>Race documents</h2>
+      <h2>Imported documents</h2>
+      <p class="small muted" style="margin:2px 0 8px">Admins only. The organiser's documents
+        are theirs to publish; competitors get the link in the race card.</p>
       <div id="docs_list" class="small"></div>
     </div>
 
@@ -217,10 +223,10 @@
     </div>
 
     <div class="card" id="log_card" style="display:none">
-      <h2>Committee log</h2>
+      <h2>Race log</h2>
       <p class="small muted" style="margin:2px 0 8px">
-        Every change to the course, exclusion zones, start time or a boat's
-        routing is recorded here, with when and why.</p>
+        Every change the admins make to the course, exclusion zones, start
+        time or a boat's routing is recorded here, with when and why.</p>
       <div id="log_list" class="small"></div>
     </div>
 
@@ -342,6 +348,9 @@ async function loadRace() {
   document.getElementById('rh_name').textContent = race.name;
   document.getElementById('rh_desc').textContent = race.description || '';
   document.getElementById('rh_desc').style.display = race.description ? '' : 'none';
+  const docsA = document.getElementById('rh_docs');
+  docsA.href = race.docs_url || '#';
+  docsA.style.display = race.docs_url ? '' : 'none';
   const local = new Date(race.start_time * 1000)
     .toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   document.getElementById('rh_start').textContent = `${vnTime(race.start_time, true)} · ${local} local`;
@@ -514,7 +523,7 @@ async function refresh() {
   if (state.weather && state.weather.degraded) {
     warn.textContent = 'Weather feed down. Some wind cells are placeholder data until the ' +
       'forecast source is reachable again (retried every 15 min). Route submissions are ' +
-      'paused meanwhile; see the committee log.';
+      'paused meanwhile; see the race log.';
     warn.style.display = 'block';
   } else {
     warn.style.display = 'none';
