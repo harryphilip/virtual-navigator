@@ -180,10 +180,17 @@ def match_roster(db, race_id, rows):
         hit = None
         sk = _sail_key(res.get("sail_no"))
         if sk:
-            for rb in free.values():
-                if rb["sail_no"] and _sail_key(rb["sail_no"]) == sk:
-                    hit = rb
-                    break
+            same_sail = [rb for rb in free.values()
+                         if rb["sail_no"] and _sail_key(rb["sail_no"]) == sk]
+            if len(same_sail) == 1:
+                hit = same_sail[0]
+            elif same_sail:
+                # two boats can carry one sail number (the 2026 Vineyard Race
+                # had a J/111 and a Gunboat both "USA 12"): the name decides
+                by_name = [rb for rb in same_sail
+                           if normalize_name(res["name"]) == normalize_name(rb["name"])]
+                if len(by_name) == 1:
+                    hit = by_name[0]
         if hit is None:
             # suffixes can sit on either side: the committee may list
             # "Midnight Rider - PMP Strategy" for a roster "Midnight Rider"

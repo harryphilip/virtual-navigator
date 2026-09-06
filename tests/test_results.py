@@ -171,3 +171,21 @@ def test_import_script_previews_and_applies(db, monkeypatch, capsys):
     assert db.execute("SELECT official_status FROM real_boats WHERE name='Moneyball'").fetchone()[0] is None
     script.main([str(race_id), "yachtscoring:50775", "--apply"])
     assert db.execute("SELECT official_status FROM real_boats WHERE name='Moneyball'").fetchone()[0] == "FIN"
+
+
+def test_a_shared_sail_number_is_settled_by_name(db):
+    """The 2026 Vineyard Race listed a J/111 and a Gunboat 62 both as USA 12:
+    sail-number matching alone swapped their results."""
+    race_id = make_race(db, MARKS, start_time=1_000_000)
+    for name, klass in (("The Roost", "J/111"), ("Dreadknot", "Gunboat 62")):
+        db.execute("INSERT INTO real_boats(race_id,name,klass,sail_no) VALUES (?,?,?,?)",
+                   (race_id, name, klass, "USA 12"))
+    db.commit()
+    rows = [{"name": "Dreadknot", "sail_no": "USA 12", "klass": "Class 16 Multihull", "status": "FIN",
+             "finish_at": 100, "elapsed_s": 80757, "corrected_s": None, "place_class": 1, "place_overall": None},
+            {"name": "The Roost", "sail_no": "USA 12", "klass": "Class 12 PHRF", "status": "FIN",
+             "finish_at": 200, "elapsed_s": 124259, "corrected_s": None, "place_class": 3, "place_overall": None}]
+    matches, unmatched, roster_left = results.match_roster(db, race_id, rows)
+    paired = {rb["name"]: res["name"] for rb, res in matches}
+    assert paired == {"Dreadknot": "Dreadknot", "The Roost": "The Roost"}
+    assert not unmatched and not roster_left
