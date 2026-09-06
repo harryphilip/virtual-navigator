@@ -9,6 +9,12 @@ name: Test and deploy
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Deploy production even inside a start freeze or the one-a-day cadence"
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -26,7 +32,7 @@ jobs:
   staging:
     name: Deploy to staging
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency: staging-group
     steps:
@@ -46,14 +52,38 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: superfly/flyctl-actions/setup-flyctl@1.6
+      # The working agreements, enforced: no production deploy from 2 h
+      # before a real race's gun to 1 h after it, and at most one a day
+      # while a real race is under way. "[deploy]" in the commit message,
+      # or the workflow's force input, overrides. A held commit is already
+      # on staging; the next push (or a forced run) carries it to production.
+      - name: Deploy guard
+        id: guard
+        run: |
+          last=$(flyctl releases --app virtual-navigator --json | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r[0]["CreatedAt"] if r else "")')
+          force=""
+          if [ "$FORCE_INPUT" = "true" ] || [[ "$COMMIT_MESSAGE" == *"[deploy]"* ]]; then force="--force"; fi
+          if python3 scripts/deploy_guard.py --overview https://virtual-navigator.com/api/overview ${last:+--last-release "$last"} $force | tee guard.txt; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "### Production: $(cat guard.txt)" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FORCE_INPUT: ${{ inputs.force }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}   # via env, never into the script
       - name: Snapshot the data volume before the new build goes live
+        if: steps.guard.outputs.go == 'true'
         run: |
           vol=$(flyctl volumes list --app virtual-navigator --json | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')
           flyctl volumes snapshots create "$vol" --app virtual-navigator
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - run: flyctl deploy --remote-only --ha=false --build-arg VN_VERSION=${{ github.sha }}
+      - if: steps.guard.outputs.go == 'true'
+        run: flyctl deploy --remote-only --ha=false --build-arg VN_VERSION=${{ github.sha }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Smoke test production
+        if: steps.guard.outputs.go == 'true'
         run: bash scripts/smoke.sh https://virtual-navigator.fly.dev ${{ github.sha }}

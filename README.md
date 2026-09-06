@@ -336,7 +336,13 @@ is fixed on its own branch.
   gauge is a floor. Past it, the answer is their Standard plan, not a
   bigger cache.
 - Leaflet 1.9.4 is vendored under `public/vendor/leaflet/` (BSD-2-Clause)
-  so the pages do not depend on a CDN, and the two typefaces (Archivo, IBM
+  so the pages do not depend on a CDN. Base map tiles come from
+  OpenStreetMap's public server unless a provider is configured: set
+  `VN_TILE_URL` (a `{z}/{x}/{y}` template carrying the provider's key) and
+  `VN_TILE_ATTRIBUTION` (and `VN_TILE_MAX_ZOOM` if not 18) with
+  `fly secrets set`, and every map picks it up through `/js/config.js`.
+  OSM's policy tolerates small sites only; put a provider in before any
+  announcement wider than a club list. The two typefaces (Archivo, IBM
   Plex Mono; SIL OFL) under `public/vendor/fonts/`, so no page load reaches
   a font service. `/privacy` and `/terms` describe what is kept and the
   rules for people; a navigator deletes their own account from the profile

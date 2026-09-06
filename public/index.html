@@ -238,6 +238,7 @@
 </main>
 
 <script src="/vendor/leaflet/leaflet.js"></script>
+<script src="/js/config.js"></script>
 <script src="/js/vn.js"></script>
 <script>
 
@@ -338,9 +339,7 @@ function ensureMap() {
   const el = document.getElementById('home_map');
   homeMap = L.map('home_map', { worldCopyJump: true, scrollWheelZoom: false })
     .setView([40, -40], 3);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors', maxZoom: 18,
-  }).addTo(homeMap);
+  vnTileLayer({ maxZoom: 18 }).addTo(homeMap);
   courseLayer = L.layerGroup().addTo(homeMap);
   new ResizeObserver(() => homeMap.invalidateSize()).observe(el);
 }

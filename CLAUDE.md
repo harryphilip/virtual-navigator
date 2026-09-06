@@ -68,10 +68,15 @@ log afterwards and the mistake is invisible.
   on it, so never merge something you would not deploy tonight.
 - Never merge someone else's unfinished work to get it out of the way. If a
   branch or worktree isn't yours, say so and ask.
-- **Deploy freeze around a start.** From two hours before any race gun until
-  the fleet has cleared the line, nothing is pushed to `main`. A deploy
-  restarts the engine and replays the gap under the lock; the start is the
-  worst moment for that.
+- **Deploy freeze around a start, one deploy a day while a race runs.**
+  From two hours before any real race's gun until an hour after it, and
+  more often than once in 20 hours while a real race is under way, the
+  Action deploys staging but **holds production** (`scripts/deploy_guard.py`;
+  the practice course never counts). A deploy restarts the engine and
+  replays the gap under the lock; the start is the worst moment for that.
+  A held commit reaches production with the next push once the guard
+  clears, or at once with `[deploy]` in the commit message or the
+  workflow's force input. Batch merges accordingly.
 
 ## After pushing main
 

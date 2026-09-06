@@ -334,6 +334,20 @@ def how_page():
     return send_from_directory("public", "how.html")
 
 
+@app.get("/js/config.js")
+def config_js():
+    """Deployment settings the pages need before their own script runs:
+    the base-map tile source. Unset means OpenStreetMap's public server;
+    set VN_TILE_URL (a {z}/{x}/{y} template with the provider's key) and
+    VN_TILE_ATTRIBUTION with `fly secrets set` to move to a provider."""
+    cfg = {"tile_url": os.environ.get("VN_TILE_URL", "").strip(),
+           "tile_attribution": os.environ.get("VN_TILE_ATTRIBUTION", "").strip(),
+           "tile_max_zoom": int(os.environ.get("VN_TILE_MAX_ZOOM") or 0) or None}
+    return Response("window.VN_CONFIG = " + json.dumps(cfg) + ";\n",
+                    mimetype="application/javascript",
+                    headers={"Cache-Control": "public, max-age=300"})
+
+
 @app.get("/privacy")
 def privacy_page():
     return send_from_directory("public", "privacy.html")

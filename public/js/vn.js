@@ -11,6 +11,16 @@ async function vnMe(force) {
   }
   return _me;
 }
+/* Base map tiles. OpenStreetMap's public server by default, whose policy
+   tolerates small sites only; a tile provider with a key drops in through
+   the VN_TILE_URL / VN_TILE_ATTRIBUTION secrets, which the server hands the
+   page as /js/config.js (loaded before this file). */
+function vnTileLayer(opts) {
+  const c = window.VN_CONFIG || {};
+  const url = c.tile_url || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const attribution = c.tile_attribution || '&copy; OpenStreetMap contributors';
+  return L.tileLayer(url, Object.assign({ attribution, maxZoom: c.tile_max_zoom || 18 }, opts || {}));
+}
 const VN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 /* one time format everywhere: "04 Sep 13:00Z" */
 function vnTime(t, withYear) {
