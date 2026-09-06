@@ -17,6 +17,8 @@ import threading
 import time
 import urllib.request
 
+from . import quota
+
 GRID = 0.25          # degrees
 _lock = threading.Lock()
 _retry = {}          # (kind, cell) -> last fallback-refetch attempt, unix
@@ -99,6 +101,7 @@ def _http_json(url, attempts=3, timeout=15):
     """GET with a few short-backoff retries — one blip must not poison a cell."""
     for i in range(attempts):
         try:
+            quota.note_calls("current" if "marine-api" in url else "wind")
             with urllib.request.urlopen(url, timeout=timeout) as resp:
                 return json.loads(resp.read().decode())
         except Exception:
