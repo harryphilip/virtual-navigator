@@ -27,7 +27,7 @@ from vn.nor import extract_race, MAX_DOC_BYTES
 from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to_gpx
 from vn.polar import Polar
 from vn.practice import ensure_practice
-from vn import quota
+from vn import land, quota
 from vn.realfleet import ingest_points
 from vn.geo import bearing_deg, haversine_nm
 from vn.sim import (SimBusy, catch_up_race, dtf_nm, enforce_course, get_marks, mark_side,
@@ -1363,6 +1363,21 @@ def submit_route(boat_id):
 
     marks = get_marks(db, race["id"])
 
+    # land, checked on what the navigator drew (before the lock: it needs no
+    # engine state and must not hold the fleet up). A long crossing is
+    # refused with the leg named; a short one is reported back as a warning.
+    land_notes = []
+    if land.available():
+        origin = (b["lat"], b["lon"]) if b["lat"] is not None else (marks[0]["lat"], marks[0]["lon"])
+        for c in land.crossings([origin] + wps):
+            if c["land_nm"] > land.REJECT_NM:
+                return _err("This route sails over land: " + land.describe(c) +
+                            ". Move the waypoints to keep the leg at sea (the check is "
+                            "coarse near harbours and small islands; anything under "
+                            f"{land.REJECT_NM:g} nm is allowed with a warning).")
+            land_notes.append("Warning: " + land.describe(c) +
+                              "; the boat will drag through it at half speed.")
+
     # the whole replacement runs under the engine lock: the boat is sailed up
     # to now under its old routing, then the future is swapped, and no tick
     # can slip in between and mark the new routing's head as already passed
@@ -1437,7 +1452,7 @@ def submit_route(boat_id):
         return _err(str(e), 503)
     _invalidate_state(race["id"])
     return jsonify({"ok": True, "waypoints": len(wps),
-                    "adjustments": adjustments,
+                    "adjustments": list(adjustments) + land_notes,
                     "waiting_for_fleet": waiting,
                     "locked_until": b["sim_time"] if b["sim_time"] else None})
 

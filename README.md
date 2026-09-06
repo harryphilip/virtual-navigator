@@ -357,8 +357,12 @@ is fixed on its own branch.
   best VMC rather than sailing explicit zig-zags; a 3 % hysteresis keeps them
   from flip-flopping tacks, and each real tack/gybe costs the race's
   maneuver penalty.
-- No land avoidance: routes crossing land will happily sail it, so route
-  around headlands like you would offshore. Course marks are honoured within
+- No land avoidance in the engine: a boat sails over land the way it drags
+  through a shoal, at half speed. Submissions are checked instead
+  (`vn/land.py`, Natural Earth 1:50m land polygons in `data/`, public
+  domain): a leg crossing more than 5 nm of land is refused with the leg
+  named, a shorter crossing (harbour walls, an islet drawn fat) comes back
+  as a warning. Route around headlands like you would offshore. Course marks are honoured within
   `mark_radius_nm`; a mark's required side (`"side": "port"|"stbd"` in the
   race JSON, or `scripts/set_side.py` on a live race) is enforced on the
   submitted routing, not on the sailed track.
