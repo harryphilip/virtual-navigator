@@ -1,4 +1,5 @@
-"""Outbound email. The only thing the site sends is a password-reset link.
+"""Outbound email: password-reset links, and whatever else the site needs to
+tell a navigator (race notices are the obvious next thing).
 
 The backend comes from the environment:
 

@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   pass_hash TEXT NOT NULL,
   is_admin INTEGER DEFAULT 0,           -- admins create/manage races AND race
   created_at INTEGER NOT NULL,
-  email TEXT                            -- optional, lower-case; only for password resets
+  email TEXT                            -- lower-case; required at sign-up since Sep 2026, older rows may be NULL
 );
 CREATE TABLE IF NOT EXISTS password_resets (
   token_hash TEXT PRIMARY KEY,          -- sha256 of the link token

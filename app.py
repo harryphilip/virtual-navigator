@@ -346,7 +346,9 @@ def auth_register():
         email = _clean_email(d.get("email"))
     except ValueError as e:
         return _err(str(e))
-    if email and db.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
+    if not email:
+        return _err("An email address is required: password resets and race notices go there.")
+    if db.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
         return _err("That email is already on an account. Sign in, or use Forgot password.", 409)
     salt = secrets.token_hex(16)
     first = db.execute("SELECT COUNT(*) c FROM users").fetchone()["c"] == 0
@@ -402,7 +404,9 @@ def auth_me():
 
 @app.post("/api/auth/email")
 def auth_set_email():
-    """Set or clear the address a reset link goes to. Blank clears it."""
+    """Change the address on the account. Every account needs one, so blank
+    is refused; accounts made before the address became required may still
+    have none until they set it here."""
     db = get_db()
     u = current_user(db)
     if not u:
@@ -412,8 +416,10 @@ def auth_set_email():
         email = _clean_email(d.get("email"))
     except ValueError as e:
         return _err(str(e))
-    if email and db.execute("SELECT 1 FROM users WHERE email=? AND id<>?",
-                            (email, u["id"])).fetchone():
+    if not email:
+        return _err("An email address is required: password resets and race notices go there.")
+    if db.execute("SELECT 1 FROM users WHERE email=? AND id<>?",
+                  (email, u["id"])).fetchone():
         return _err("That email is already on another account.", 409)
     db.execute("UPDATE users SET email=? WHERE id=?", (email, u["id"]))
     db.commit()

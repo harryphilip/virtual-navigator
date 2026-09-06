@@ -1,5 +1,6 @@
-"""Password reset by email: opt-in address, one-hour single-use links, no
-account enumeration, every other session signed out on change."""
+"""Password reset by email: required address (accounts older than the rule
+may still lack one), one-hour single-use links, no account enumeration,
+every other session signed out on change."""
 import re
 import time
 
@@ -14,10 +15,13 @@ def console_mail(monkeypatch):
     mail.SENT.clear()
 
 
-def register(username, email=None, password="secret1"):
+def register(username, email="default", password="secret1"):
+    """email="default" derives one from the username; None sends no email key."""
     import app as appmod
     c = appmod.app.test_client()
     body = {"username": username, "password": password, "display_name": username}
+    if email == "default":
+        email = f"{username}@example.com"
     if email is not None:
         body["email"] = email
     r = c.post("/api/auth/register", json=body)
@@ -30,30 +34,34 @@ def link_from(msg):
     return m.group(1)
 
 
-def test_email_is_optional_and_validated(client):
+def test_email_is_required_and_validated(client):
     c, r = register("alice", "Alice@Example.com")
     assert r.status_code == 200
     assert c.get("/api/auth/me").get_json()["user"]["email"] == "alice@example.com"
     assert register("bob", "not-an-email")[1].status_code == 400
     assert register("carol", "alice@example.com")[1].status_code == 409   # taken
-    c2, r2 = register("dave")
-    assert r2.status_code == 200
-    assert c2.get("/api/auth/me").get_json()["user"]["email"] is None
+    assert register("dave", None)[1].status_code == 400                   # no email key
+    assert register("dave", "")[1].status_code == 400                     # blank
+    assert register("dave", "   ")[1].status_code == 400
 
 
-def test_set_and_clear_email_when_signed_in(client):
+def test_change_email_when_signed_in_but_never_clear_it(client):
     c, _ = register("alice")
     assert client.post("/api/auth/email", json={"email": "x@y.zz"}).status_code == 401
     assert c.post("/api/auth/email", json={"email": "bad"}).status_code == 400
-    assert c.post("/api/auth/email", json={"email": "Alice@Example.com"}).status_code == 200
-    assert c.get("/api/auth/me").get_json()["user"]["email"] == "alice@example.com"
-    assert c.post("/api/auth/email", json={"email": ""}).status_code == 200
-    assert c.get("/api/auth/me").get_json()["user"]["email"] is None
+    assert c.post("/api/auth/email", json={"email": "Alice2@Example.com"}).status_code == 200
+    assert c.get("/api/auth/me").get_json()["user"]["email"] == "alice2@example.com"
+    assert c.post("/api/auth/email", json={"email": ""}).status_code == 400
+    assert c.get("/api/auth/me").get_json()["user"]["email"] == "alice2@example.com"
+    register("bob")
+    assert c.post("/api/auth/email", json={"email": "bob@example.com"}).status_code == 409
 
 
-def test_forgot_sends_one_link_by_username_or_email_and_never_enumerates(client):
+def test_forgot_sends_one_link_by_username_or_email_and_never_enumerates(client, db):
     register("alice", "alice@example.com")
-    register("bob")                                       # no email on file
+    register("bob")
+    db.execute("UPDATE users SET email=NULL WHERE username='bob'")   # pre-rule account
+    db.commit()
     for i, who in enumerate(("alice", "ALICE@example.com", "bob", "nobody")):
         r = client.post("/api/auth/forgot", json={"account": who},
                         headers={"Fly-Client-IP": f"203.0.113.{i}"})    # one client each
