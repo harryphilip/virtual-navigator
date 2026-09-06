@@ -363,12 +363,18 @@ async function loadRaces() {
   if (courseLayer) courseLayer.clearLayers();
   const bounds = [];
   const live = races.filter(r => r.status === 'racing');
-  const featured = live[0] || races.find(r => r.status === 'upcoming');
+  // something to enter first: the practice course (rolling start, always
+  // open), then a race that is on, then the next gun
+  const practice = races.find(r => r.rolling && r.entries_open);
+  const featured = practice || live[0] || races.find(r => r.status === 'upcoming');
   const cta = document.getElementById('cta_race');
   if (featured) {
     cta.href = `/race?id=${featured.id}`;
-    cta.textContent = `${featured.status === 'racing' ? 'Follow' : 'Enter'} ${featured.name}`;
-    document.getElementById('cta_note').textContent = featured.status === 'racing'
+    const enter = featured.rolling || featured.status !== 'racing';
+    cta.textContent = `${enter ? 'Enter' : 'Follow'} ${featured.name}`;
+    document.getElementById('cta_note').textContent = featured.rolling
+      ? `Open now · your boat starts the moment you submit a route · ${featured.entries_total} boat${featured.entries_total === 1 ? '' : 's'} sailing`
+      : featured.status === 'racing'
       ? `Racing now · ${featured.entries_total} boat${featured.entries_total === 1 ? '' : 's'} on the course · entries closed at the gun`
       : `Starts ${until(featured.start_time)}`;
   }
@@ -385,11 +391,14 @@ async function loadRaces() {
           .addTo(courseLayer));
     }
 
-    const badge = r.status === 'racing' ? '<span class="badge fin">racing</span>'
+    const badge = r.rolling && r.entries_open ? '<span class="badge fin">open · rolling start</span>'
+      : r.status === 'racing' ? '<span class="badge fin">racing</span>'
       : r.status === 'upcoming' ? '<span class="badge real">upcoming</span>'
       : '<span class="badge virtual">finished</span>';
     let body = '';
-    if (r.status === 'racing' && r.top.length) {
+    if (r.rolling && r.entries_open && !r.top.length) {
+      body = `<div class="small muted">Enter any time until ${vnTime(r.entries_close_at)}; your boat starts the moment you submit a route.</div>`;
+    } else if (r.status === 'racing' && r.top.length) {
       body = '<table class="list podium"><tbody>' + r.top.map((t, n) =>
         `<tr><td>${n + 1}</td>
          <td>${esc(t.name)}</td>

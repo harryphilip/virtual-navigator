@@ -77,6 +77,12 @@ through real historical wind.
   course through each mark (sided marks rounded correctly) and sails it
   until its navigator submits one. Every submission is timestamped in an
   audit log.
+- **The practice course is always open.** A rolling-start race
+  (`races.rolling`, `vn/practice.py`) takes entries for 28 days after its
+  gun and starts each boat the moment its first route is submitted;
+  finishers rank by their own elapsed time. The ticker opens a fresh edition
+  from `data/races/practice_*.json` whenever none is taking entries, so a
+  new navigator always has a boat on the water within minutes.
 - **Virtual boats start when the real fleet does.** In a race with a tracked
   real fleet, virtual boats wait on the line until 5% of the real boats have
   been seen under way after the gun (`fleet_start_pct`, `vn/fleetgate.py`),

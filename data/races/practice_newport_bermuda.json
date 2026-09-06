@@ -1,0 +1,17 @@
+{
+  "name": "Practice: Newport to Bermuda",
+  "description": "Always open. Enter any time; your boat starts the moment you submit a route and sails the classic 635 nm from Newport across the Gulf Stream to Bermuda through today's real wind and current. Finishers are ranked by elapsed time, so a boat that starts on Tuesday races one that started on Friday. Entries stay open for four weeks, then a fresh edition opens. No real fleet, no organiser: this course is for learning the game, trying routing software, and racing your friends whenever you like. Polar: Class40 (meltemus.com) at 90%; everyone sails the same numbers.",
+  "rolling": true,
+  "start_time": "2026-09-06T12:00:00Z",
+  "polar_file": "../polar_class40.pol",
+  "polar_name": "Class40 (meltemus.com)",
+  "perf_factor": 0.9,
+  "step_minutes": 10,
+  "mark_radius_nm": 2.0,
+  "maneuver_penalty_s": 120,
+  "currents_enabled": true,
+  "marks": [
+    { "name": "Start — off Brenton Reef, Newport", "lat": 41.400, "lon": -71.350 },
+    { "name": "Finish — off St David's Head, Bermuda", "lat": 32.420, "lon": -64.600 }
+  ]
+}

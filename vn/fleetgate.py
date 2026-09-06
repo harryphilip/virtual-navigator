@@ -78,9 +78,9 @@ def open_gate(db, race, now=None):
     marks = get_marks(db, race["id"])
     db.execute("UPDATE races SET virtual_start=? WHERE id=?", (t, race["id"]))
     waiting = db.execute(
-        "UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=1 WHERE race_id=? "
+        "UPDATE boats SET sim_time=?, started_at=?, lat=?, lon=?, next_mark=1 WHERE race_id=? "
         "AND sim_time IS NULL AND id IN (SELECT boat_id FROM route_wps)",
-        (t, marks[0]["lat"], marks[0]["lon"], race["id"])).rowcount
+        (t, t, marks[0]["lat"], marks[0]["lon"], race["id"])).rowcount
     add_race_log(db, race["id"],
                  f"Fleet under way: {gate['started']} of {gate['fleet']} real boats seen "
                  f"after the gun ({gate['needed']} needed). Virtual boats start at "
