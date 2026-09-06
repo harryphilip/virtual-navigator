@@ -189,3 +189,21 @@ def test_a_shared_sail_number_is_settled_by_name(db):
     paired = {rb["name"]: res["name"] for rb, res in matches}
     assert paired == {"Dreadknot": "Dreadknot", "The Roost": "The Roost"}
     assert not unmatched and not roster_left
+
+
+def test_imported_results_close_the_race(client, db):
+    """Once the committee's results are in, the race reads as finished on the
+    board and the AIS feed stops listening for it, whatever a straggler or a
+    re-bound moored vessel does."""
+    import time
+    from vn.ais import live_ais_races
+    race_id = fleet(db)
+    db.execute("UPDATE races SET ais=1, start_time=? WHERE id=?", (int(time.time()) - 86400, race_id))
+    db.commit()
+    assert [r["id"] for r in live_ais_races(db)] == [race_id]
+    assert [r["status"] for r in client.get("/api/overview").get_json() if r["id"] == race_id] == ["racing"]
+    matches, _, _ = results.match_roster(db, race_id, results.parse_yachtscoring(ys_payload()))
+    race = db.execute("SELECT * FROM races WHERE id=?", (race_id,)).fetchone()
+    results.apply_results(db, race, matches, "yachtscoring:1#1")
+    assert live_ais_races(db) == []
+    assert [r["status"] for r in client.get("/api/overview").get_json() if r["id"] == race_id] == ["finished"]

@@ -168,8 +168,9 @@ def race_box(marks, margin=BOX_MARGIN_DEG):
 def live_ais_races(db, now=None):
     now = int(now or time.time())
     return [r for r in db.execute(
-        "SELECT * FROM races WHERE ais=1 AND start_time-? <= ? AND ? <= start_time+?",
-        (PRE_START, now, now, POST_START))]
+        "SELECT * FROM races WHERE ais=1 AND results_at IS NULL "
+        "AND start_time-? <= ? AND ? <= start_time+?",
+        (PRE_START, now, now, POST_START))]      # official results in: the race is over
 
 
 class AISFeed(threading.Thread):
