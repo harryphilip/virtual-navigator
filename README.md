@@ -319,7 +319,14 @@ is fixed on its own branch.
   file's title and description to a live race.
 
 - Leaflet 1.9.4 is vendored under `public/vendor/leaflet/` (BSD-2-Clause)
-  so the pages do not depend on a CDN. Base map tiles come from the public
+  so the pages do not depend on a CDN, and the two typefaces (Archivo, IBM
+  Plex Mono; SIL OFL) under `public/vendor/fonts/`, so no page load reaches
+  a font service. `/privacy` and `/terms` describe what is kept and the
+  rules for people; a navigator deletes their own account from the profile
+  page (`POST /api/auth/delete`, password-confirmed) and
+  `scripts/delete_user.py <username>` does the same from the console —
+  both through `vn.db.delete_user`, which withdraws the account's boats and
+  refuses the last admin. Base map tiles come from the public
   OpenStreetMap server, whose usage policy tolerates small sites only; budget
   for a tile provider before a large fleet.
 

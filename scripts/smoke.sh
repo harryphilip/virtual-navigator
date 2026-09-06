@@ -27,7 +27,7 @@ except Exception: print("noanswer", "")' 2>/dev/null)
   fi
   sleep 5
 done
-for path in / /how /api/races /robots.txt; do
+for path in / /how /privacy /terms /api/races /robots.txt; do
   code=$(curl -s -m 20 -o /dev/null -w '%{http_code}' "$base$path")
   if [ "$code" != 200 ]; then echo "smoke: $base$path answered $code" >&2; exit 1; fi
 done

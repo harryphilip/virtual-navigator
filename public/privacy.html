@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · Virtual Navigator</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/vendor/fonts/fonts.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="logo"><a href="/" style="color:inherit"><svg viewBox="0 0 56 44" aria-hidden="true"><line x1="5" y1="2" x2="5" y2="42" stroke="currentColor" stroke-width="3"></line><path d="M8 4 L52 22 L8 40 Z" fill="#c8102e"></path><path d="M12 27 C 18 18, 24 18, 29 23 C 33 27, 37 26, 41 21" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path></svg><span>Virtual Navigator</span></a></div>
+  <div class="sub">Privacy</div>
+  <div class="right"><a href="/how">How it works</a> · <a href="/terms">Terms</a></div>
+</header>
+
+<main class="wrap doc" id="main">
+  <h1 class="doc-title">Privacy notice</h1>
+  <p class="lead">What this site keeps about you, who else sees any of it, and
+  how to take it back. Last changed 6 September 2026.</p>
+
+  <div class="card" id="who">
+    <h2>Who runs it</h2>
+    <p>Virtual Navigator is run by Harry Philip as a free, non-commercial game
+    for a club-sized fleet. It has no advertising, no analytics, and no
+    tracking cookies. The server runs on Fly.io in the United States (Newark
+    region). For anything about your data, open an issue or write through the
+    <a href="https://github.com/harryphilip/virtual-navigator" rel="noopener">GitHub
+    repository</a>.</p>
+  </div>
+
+  <div class="card" id="what">
+    <h2>What is stored</h2>
+    <p><b>Your account:</b> username, display name, a salted PBKDF2 hash of
+    your password (never the password), your email address, and when the
+    account was made. You must be 16 or over.</p>
+    <p><b>Your session:</b> one cookie, <code>vn_session</code>, that keeps you
+    signed in for 90 days. It is essential to the service and carries nothing
+    but a random token.</p>
+    <p><b>Password resets:</b> a hashed reset token that lives for one hour and
+    works once. The link goes to your email address.</p>
+    <p><b>Your boats:</b> boat names, the routes you submit and when you
+    submitted them, and the track your boat sailed. Waypoints you have not
+    yet reached are private to you. The sailed track, submission times, boat
+    name and your username are public, on the race page and on your profile
+    page, exactly like a race tracker.</p>
+    <p><b>Race logs:</b> when an admin corrects a course or restarts a boat,
+    or when a boat is withdrawn, the race log records it. Log entries name
+    boats, not people.</p>
+    <p><b>Server logs:</b> the web server records each request with your IP
+    address, kept for a short time by the hosting provider's log service and
+    used only to keep the site running and to stop abuse.</p>
+  </div>
+
+  <div class="card" id="others">
+    <h2>Who else sees anything</h2>
+    <p><b>Map tiles.</b> The charts load from OpenStreetMap, OpenSeaMap and
+    NOAA, so those servers see your IP address and the map areas you look at,
+    under their own policies. Fonts are served from this site, not from a
+    font service.</p>
+    <p><b>Email.</b> Password-reset links and notices about your races are
+    sent through an email delivery provider, which handles your address for
+    that purpose only.</p>
+    <p><b>Weather, bathymetry and tracker feeds</b> (Open-Meteo, NOAA, YB
+    Tracking, aisstream.io) are fetched by the server about the race, never
+    about you.</p>
+    <p>Nothing is sold, shared for marketing, or used to train anything.</p>
+  </div>
+
+  <div class="card" id="rights">
+    <h2>Your data, your call</h2>
+    <p><b>Change your email</b> on your profile page.</p>
+    <p><b>Download your data:</b> every boat's sailed track is available as
+    GPX from its race page, and your profile lists your submissions.</p>
+    <p><b>Delete your account</b> from your profile page. It removes the
+    account, every boat you entered with its routes and sailed tracks, and
+    signs you out everywhere. Race logs keep a line saying the boat was
+    withdrawn. If you cannot sign in, ask through the repository and the
+    admin will do the same from the server.</p>
+    <p><b>Real boats.</b> If your yacht appears on a leaderboard from a public
+    tracker and you would rather it did not, say so through the repository
+    and it will be hidden.</p>
+    <p>If you are in the EU or UK, the legal basis for all of the above is
+    the service you asked for by creating an account, and the site's
+    legitimate interest in keeping itself running. You have the rights of
+    access, correction, erasure and portability described here, and you may
+    complain to your data-protection authority.</p>
+  </div>
+
+  <footer class="site-foot">
+    <p><b>Not for navigation.</b> Virtual Navigator is a simulation. Nothing here
+    may be used to navigate a vessel.</p>
+    <p>Wind and current: <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a>
+    (CC BY 4.0). Charts: NOAA ENC, <a href="https://www.openstreetmap.org/copyright"
+    rel="noopener">OpenStreetMap</a> contributors, OpenSeaMap. Bathymetry: NOAA NCEI.
+    Polars: meltemus.com. Real-boat positions: YB Tracking and aisstream.io, shown
+    for comparison only. Not affiliated with any race organiser.</p>
+    <p><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> ·
+    <a href="https://github.com/harryphilip/virtual-navigator" rel="noopener">Source on GitHub</a>, MIT licence. Leaflet is BSD-2-Clause.</p>
+  </footer>
+</main>
+
+<script src="/js/vn.js"></script>
+</body>
+</html>

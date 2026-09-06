@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Navigator — Virtual Navigator</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/vendor/fonts/fonts.css">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -34,6 +33,18 @@
     </form>
     <p class="small muted" style="margin:6px 0 0">Password resets and notices about your races go here.
     Other navigators never see it.</p>
+    <details style="margin-top:14px">
+      <summary class="small">Delete my account</summary>
+      <form id="f_delete" novalidate>
+        <p class="small muted" style="margin:6px 0 8px">This removes your account, every boat you
+          entered with its routes and sailed tracks, and signs you out everywhere. Race logs keep
+          a line saying the boat was withdrawn. It cannot be undone.</p>
+        <label for="p_del_pw">Your password</label>
+        <input id="p_del_pw" name="password" type="password" autocomplete="current-password" required>
+        <div class="row actions"><button type="submit" class="ghost" id="p_del_btn">Delete my account</button></div>
+        <div class="msg" id="p_del_msg" aria-live="polite"></div>
+      </form>
+    </details>
   </div>
 
   <div class="card">
@@ -63,12 +74,7 @@
     rel="noopener">OpenStreetMap</a> contributors, OpenSeaMap. Bathymetry: NOAA NCEI.
     Polars: meltemus.com. Real-boat positions: YB Tracking and aisstream.io, shown
     for comparison only. Not affiliated with any race organiser.</p>
-    <p><b>Your data.</b> An account is a username, a display name and a password
-    hash and an email address, used for password-reset links and notices
-    about your races. Sailed tracks and
-    submission times are public; future waypoints are not. The session cookie
-    lasts 90 days. Pages load fonts from Google and map tiles from OpenStreetMap
-    and NOAA, which see your IP address.</p>
+    <p><b>Your data.</b> An account is a username, a display name, a password hash and an email address. Sailed tracks and submission times are public; future waypoints are not. Fonts are served from this site; map tiles come from OpenStreetMap and NOAA, which see your IP address. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · you can delete your account from your profile page.</p>
     <p><a href="https://github.com/harryphilip/virtual-navigator" rel="noopener">Source on GitHub</a>, MIT licence. Leaflet is BSD-2-Clause.</p>
   </footer>
 </main>
@@ -118,6 +124,21 @@ const uname = new URLSearchParams(location.search).get('u') || '';
         msg.className = 'msg ok';
         msg.textContent = `Saved: ${jj.email}.`;
         await vnMe(true);
+      } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+    };
+    document.getElementById('f_delete').onsubmit = async (ev) => {
+      ev.preventDefault();
+      const msg = document.getElementById('p_del_msg');
+      if (!confirm('Delete your account and every boat you entered? This cannot be undone.')) return;
+      msg.className = 'msg'; msg.textContent = '…';
+      try {
+        const r = await fetch('/api/auth/delete', { method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: document.getElementById('p_del_pw').value }) });
+        const jj = await r.json();
+        if (!r.ok) throw new Error(jj.error || r.statusText);
+        await vnMe(true);
+        location.href = '/?deleted=1';
       } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
     };
   }
