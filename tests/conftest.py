@@ -141,6 +141,7 @@ def new_client(username, password="secret1", display=None):
     import app as appmod
     c = appmod.app.test_client()
     r = c.post("/api/auth/register", json={"username": username, "password": password,
-                                            "display_name": display or username})
+                                            "display_name": display or username,
+                                            "email": f"{username}@example.test"})
     assert r.status_code == 200, r.get_json()
     return c

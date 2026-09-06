@@ -27,13 +27,13 @@
   <div class="card" id="p_account" style="display:none">
     <h2>Account</h2>
     <form id="f_email" novalidate>
-      <label for="p_email">Email for password resets (optional)</label>
-      <input id="p_email" name="email" type="email" autocomplete="email" maxlength="120">
+      <label for="p_email">Email</label>
+      <input id="p_email" name="email" type="email" autocomplete="email" maxlength="120" required>
       <div class="row actions"><button type="submit" class="ghost">Save</button></div>
       <div class="msg" id="p_email_msg" aria-live="polite"></div>
     </form>
-    <p class="small muted" style="margin:6px 0 0">Used only to send a reset link when you ask for one.
-    Leave it blank to keep no email on file; a forgotten password then cannot be recovered.</p>
+    <p class="small muted" style="margin:6px 0 0">Password resets and notices about your races go here.
+    Other navigators never see it.</p>
   </div>
 
   <div class="card">
@@ -64,8 +64,8 @@
     Polars: meltemus.com. Real-boat positions: YB Tracking and aisstream.io, shown
     for comparison only. Not affiliated with any race organiser.</p>
     <p><b>Your data.</b> An account is a username, a display name and a password
-    hash, plus an email address if you choose to add one, used only to send a
-    password-reset link. Sailed tracks and
+    hash and an email address, used for password-reset links and notices
+    about your races. Sailed tracks and
     submission times are public; future waypoints are not. The session cookie
     lasts 90 days. Pages load fonts from Google and map tiles from OpenStreetMap
     and NOAA, which see your IP address.</p>
@@ -116,7 +116,7 @@ const uname = new URLSearchParams(location.search).get('u') || '';
         const jj = await r.json();
         if (!r.ok) throw new Error(jj.error || r.statusText);
         msg.className = 'msg ok';
-        msg.textContent = jj.email ? `Saved: reset links go to ${jj.email}.` : 'Saved: no email on file.';
+        msg.textContent = `Saved: ${jj.email}.`;
         await vnMe(true);
       } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
     };

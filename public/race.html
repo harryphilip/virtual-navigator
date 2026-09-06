@@ -66,13 +66,13 @@
             <div><label for="mb_rpass">Password</label>
               <input id="mb_rpass" name="password" type="password" autocomplete="new-password" required minlength="6"></div>
           </div>
-          <label for="mb_remail">Email (optional, only for password resets)</label>
-          <input id="mb_remail" name="email" type="email" autocomplete="email" maxlength="120">
+          <label for="mb_remail">Email</label>
+          <input id="mb_remail" name="email" type="email" autocomplete="email" maxlength="120" required>
           <div class="row actions">
             <button type="submit">Create account</button>
             <button type="button" class="ghost" id="mb_show_login">I have an account</button>
           </div>
-          <p class="small muted" style="margin:6px 0 0">Without an email on file a forgotten password cannot be reset, so write it down.</p>
+          <p class="small muted" style="margin:6px 0 0">Your email is where password resets and notices about your races go; other navigators never see it.</p>
         </form>
         <div class="msg" id="mb_msg" aria-live="polite"></div>
       </div>
@@ -252,8 +252,8 @@
       Polars: meltemus.com. Real-boat positions: YB Tracking and aisstream.io, shown
       for comparison only. Not affiliated with any race organiser.</p>
       <p><b>Your data.</b> An account is a username, a display name and a password
-      hash, plus an email address if you choose to add one, used only to send a
-    password-reset link. Sailed tracks and
+      hash and an email address, used for password-reset links and notices
+    about your races. Sailed tracks and
       submission times are public; future waypoints are not. The session cookie
       lasts 90 days. Pages load fonts from Google and map tiles from OpenStreetMap
       and NOAA, which see your IP address.</p>
@@ -1032,6 +1032,7 @@ async function authAction(ev, path, ids) {
     const bad = form.querySelector(':invalid');
     msg.textContent = bad && bad.id.endsWith('pass') ? 'Password must be at least 6 characters.'
       : bad && bad.id.endsWith('user') ? 'Username: 3 to 30 characters, letters, digits, dash or underscore.'
+      : bad && bad.id.endsWith('email') ? 'Enter a valid email address.'
       : 'Please fill in the form.';
     bad && bad.focus();
     return;

@@ -26,8 +26,10 @@ def test_first_account_is_admin_second_is_not(client):
 def test_register_validation(client):
     assert client.post("/api/auth/register", json={"username": "x", "password": "secret1"}).status_code == 400
     assert client.post("/api/auth/register", json={"username": "okname", "password": "123"}).status_code == 400
+    assert client.post("/api/auth/register", json={"username": "okname", "password": "secret1"}).status_code == 400   # no email
     new_client("taken")
-    r = client.post("/api/auth/register", json={"username": "Taken", "password": "secret1"})
+    r = client.post("/api/auth/register", json={"username": "Taken", "password": "secret1",
+                                                "email": "taken2@example.test"})
     assert r.status_code == 409
 
 

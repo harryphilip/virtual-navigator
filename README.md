@@ -134,9 +134,11 @@ through real historical wind.
 ## Accounts & roles
 
 Navigator accounts are a username and a password (salted PBKDF2, 90-day
-session cookies). An email address is optional and used for one thing:
-password-reset links (single use, one hour, every other session signed out
-on change). Reset mail goes out over SMTP when the server has
+session cookies). An email address is required at sign-up; password-reset
+links go there (single use, one hour, every other session signed out on
+change), and so will notices about a navigator's races. Accounts created
+before September 2026 may have none on file until they add one on their
+profile page. Mail goes out over SMTP when the server has
 `SMTP_HOST`, `SMTP_PORT` (587 STARTTLS or 465 TLS), `SMTP_USER`,
 `SMTP_PASS` and `MAIL_FROM` set (`fly secrets set …`); any provider with an
 SMTP endpoint works. `MAIL_BACKEND=console` logs the link instead (dev,

@@ -101,8 +101,8 @@
           <button type="button" class="ghost" id="a_forgot_back">Back to sign in</button>
         </div>
         <div class="msg" id="fg_msg" aria-live="polite"></div>
-        <p class="small muted" style="margin:6px 0 0">The link works once, for one hour, and only if the
-        account has an email on file. Add one on your profile page.</p>
+        <p class="small muted" style="margin:6px 0 0">The link goes to the email on your account and works
+        once, for one hour.</p>
       </form>
       <form id="f_reg" autocomplete="on" novalidate hidden>
         <div class="row">
@@ -114,16 +114,16 @@
           <div><label for="r_pass">Password</label>
             <input id="r_pass" name="password" type="password" autocomplete="new-password" required minlength="6"></div>
         </div>
-        <label for="r_email">Email (optional, only for password resets)</label>
-        <input id="r_email" name="email" type="email" autocomplete="email" maxlength="120">
+        <label for="r_email">Email</label>
+        <input id="r_email" name="email" type="email" autocomplete="email" maxlength="120" required>
         <div class="row actions">
           <button type="submit">Create account</button>
           <button type="button" class="ghost" id="a_show_login">I have an account</button>
         </div>
         <div class="msg" id="r_msg" aria-live="polite"></div>
         <p class="small muted" style="margin:6px 0 0">3 to 30 characters for the username; letters,
-        digits, dash or underscore. Passwords are at least 6 characters. Without an email on file
-        there is no way to reset a forgotten password, so write it down.</p>
+        digits, dash or underscore. Passwords are at least 6 characters. Your email is where password
+        resets and notices about your races go; other navigators never see it.</p>
       </form>
     </div>
     <div id="acct_in" style="display:none" class="small"></div>
@@ -230,8 +230,8 @@
     Polars: meltemus.com. Real-boat positions: YB Tracking and aisstream.io, shown
     for comparison only. Not affiliated with any race organiser.</p>
     <p><b>Your data.</b> An account is a username, a display name and a password
-    hash, plus an email address if you choose to add one, used only to send a
-    password-reset link. Sailed tracks and
+    hash and an email address, used for password-reset links and notices
+    about your races. Sailed tracks and
     submission times are public; future waypoints are not. The session cookie
     lasts 90 days. Pages load fonts from Google and map tiles from OpenStreetMap
     and NOAA, which see your IP address.</p>
@@ -291,6 +291,7 @@ async function acctSubmit(ev, path, ids, msgId) {
     const bad = form.querySelector(':invalid');
     msg.textContent = bad && bad.id.endsWith('pass') ? 'Password must be at least 6 characters.'
       : bad && bad.id.endsWith('user') ? 'Username: 3 to 30 characters, letters, digits, dash or underscore.'
+      : bad && bad.id.endsWith('email') ? 'Enter a valid email address.'
       : 'Please fill in the form.';
     bad && bad.focus();
     return;
