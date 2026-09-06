@@ -29,6 +29,10 @@ def test_titles_are_courses_not_brands():
 def test_description_names_the_official_race_once():
     for fname, d in _races():
         desc = d.get("description", "")
+        if d.get("rolling"):
+            # the practice course has no real fleet and no organiser
+            assert "alongside" not in desc, fname
+            continue
         assert desc.startswith("Sailed alongside the "), f"{fname}: {desc[:60]!r}"
         assert "rolex" not in desc.lower(), fname
         assert "virtual edition" not in desc.lower(), fname

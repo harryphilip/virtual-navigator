@@ -381,8 +381,14 @@ async function loadRace() {
   docsA.style.display = race.docs_url ? '' : 'none';
   const local = new Date(race.start_time * 1000)
     .toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-  document.getElementById('rh_start').textContent = `${vnTime(race.start_time, true)} · ${local} local`;
-  renderGate(race);
+  if (race.rolling) {
+    document.getElementById('rh_start').textContent =
+      `Rolling: your boat starts when you submit a route · entries open until ${vnTime(race.entries_close_at, true)}`;
+    document.getElementById('rh_gate').textContent = 'finishers rank by elapsed time';
+  } else {
+    document.getElementById('rh_start').textContent = `${vnTime(race.start_time, true)} · ${local} local`;
+    renderGate(race);
+  }
   document.getElementById('rh_polar').textContent =
     `${race.polar_name} at ${Math.round(race.perf_factor * 100)}%`;
   document.getElementById('rh_course').textContent = `${race.marks.length} marks`;
@@ -577,6 +583,12 @@ function renderGate(src) {
   // a race with a tracked real fleet holds its virtual boats until the fleet is under way
   const g = src.fleet_gate, el = document.getElementById('rh_gate');
   if (!el) return;
+  if (race && race.rolling) {
+    // rolling start: no gate, every boat starts on its own submission
+    el.parentElement.style.display = '';
+    el.textContent = 'each boat on its own submission · finishers rank by elapsed time';
+    return;
+  }
   if (!g) { el.textContent = ''; el.parentElement.style.display = 'none'; return; }
   el.parentElement.style.display = '';
   el.textContent = src.virtual_start
@@ -691,7 +703,7 @@ function drawLeaderboard() {
     const badge = o && o.status !== 'FIN'
       ? `<span class="badge" title="official result">${esc(o.status)}</span>`
       : e.finished_at
-      ? `<span class="badge fin" title="${o ? 'official finish time' : 'finish seen on the tracker'}">finished${o ? ' ·' : ''}${o && o.place_class ? ' ' + o.place_class + ordinal(o.place_class) : ''}</span>`
+      ? `<span class="badge fin" title="${o ? 'official finish time' : e.elapsed_s != null && state.rolling ? 'elapsed time from this boat\'s own start' : 'finish seen on the tracker'}">finished${o ? ' ·' : ''}${o && o.place_class ? ' ' + o.place_class + ordinal(o.place_class) : ''}${!o && state.rolling && e.elapsed_s != null ? ' · ' + fmtElapsed(e.elapsed_s) : ''}</span>`
       : !e.started ? (e.type === 'real' && state.now > state.start_time
           ? '<span class="badge" title="the tracker has not reported this boat">no tracker data</span>'
           : '<span class="badge">not started</span>')
@@ -973,8 +985,10 @@ async function showManage() {
   document.getElementById('mb_register').style.display = (me && !my && open) ? 'block' : 'none';
   const closed = document.getElementById('mb_closed');
   closed.style.display = (!my && !open) ? 'block' : 'none';
-  closed.textContent = `Entries closed at the scheduled start${closedAt ? ', ' + closedAt : ''}. ` +
-    'Follow the fleet here, and enter the next race before its gun.';
+  closed.textContent = race && race.rolling
+    ? `Entries for this edition closed${closedAt ? ' ' + closedAt : ''}. The next practice edition is on the race board.`
+    : `Entries closed at the scheduled start${closedAt ? ', ' + closedAt : ''}. ` +
+      'Follow the fleet here, and enter the next race before its gun.';
   document.getElementById('mb_manage').style.display = (me && my) ? 'block' : 'none';
   document.getElementById('mb_title').textContent = (me && my) ? 'My boat' : open ? 'Enter this race' : 'Entries closed';
   document.getElementById('results_card').style.display = (me && me.is_admin) ? 'block' : 'none';

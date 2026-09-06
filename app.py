@@ -25,6 +25,7 @@ from vn.forecast import make_snapshot
 from vn.nor import extract_race, MAX_DOC_BYTES
 from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to_gpx
 from vn.polar import Polar
+from vn.practice import ensure_practice
 from vn.realfleet import ingest_points
 from vn.geo import bearing_deg, haversine_nm
 from vn.sim import (SimBusy, catch_up_race, dtf_nm, enforce_course, get_marks, mark_side,
@@ -164,11 +165,18 @@ def _race_or_404(db, race_id):
     return db.execute("SELECT * FROM races WHERE id=?", (race_id,)).fetchone()
 
 
+ROLLING_ENTRY_DAYS = 28      # a rolling-start race takes entries this long after its gun
+
+
 def _entries_close_at(db, race):
     """Entries close at the scheduled start, full stop. Whether the virtual
     boats then leave the line at once or wait for the real fleet to get
     under way is the fleet gate's business (vn/fleetgate.py), not the
-    entry's."""
+    entry's. A rolling-start race (the practice course) takes entries for
+    ROLLING_ENTRY_DAYS after its gun; each boat starts when its navigator
+    submits a route."""
+    if race["rolling"]:
+        return race["start_time"] + ROLLING_ENTRY_DAYS * 86400
     return race["start_time"]
 
 
@@ -189,8 +197,10 @@ def _start_unrouted(db, race, now):
     """Nobody who entered is left on the dock. At the scheduled start every
     boat that holds no route is given the straight-line course and started
     like the rest: at the gun, or on the line waiting for the fleet gate.
-    Its navigator can replace the route at any time. Returns the names."""
-    if now < race["start_time"]:
+    Its navigator can replace the route at any time. Returns the names.
+    A rolling-start race has no gun to be late for: a boat there waits on
+    the dock until its navigator submits a route."""
+    if now < race["start_time"] or race["rolling"]:
         return []
     boats = db.execute(
         "SELECT * FROM boats WHERE race_id=? AND sim_time IS NULL AND finished_at IS NULL "
@@ -207,8 +217,8 @@ def _start_unrouted(db, race, now):
                            [(b["id"], i, la, lo) for i, (la, lo) in enumerate(wps)])
             db.execute("INSERT INTO route_log(boat_id,submitted_at,wp_json) VALUES (?,?,?)",
                        (b["id"], now, json.dumps(wps)))
-            db.execute("UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=1 WHERE id=?",
-                       (vs, marks[0]["lat"], marks[0]["lon"], b["id"]))
+            db.execute("UPDATE boats SET sim_time=?, started_at=?, lat=?, lon=?, next_mark=1 "
+                       "WHERE id=?", (vs, vs, marks[0]["lat"], marks[0]["lon"], b["id"]))
             names.append(b["name"])
         add_race_log(db, race["id"],
                      f"{', '.join(names)} had no route at the start and "
@@ -596,6 +606,7 @@ def list_races():
         nr = db.execute("SELECT COUNT(*) c FROM real_boats WHERE race_id=?", (r["id"],)).fetchone()["c"]
         out.append({"id": r["id"], "name": r["name"], "description": r["description"],
                     "start_time": r["start_time"], "started": now >= r["start_time"],
+                    "rolling": bool(r["rolling"]),
                     "entries_open": _entries_open(db, r, now),
                     "virtual_boats": nb, "real_boats": nr,
                     "polar_name": r["polar_name"], "perf_factor": r["perf_factor"]})
@@ -681,6 +692,7 @@ def race_detail(race_id):
                     "fleet_start_pct": r["fleet_start_pct"],
                     "fleet_gate": fleet_gate(db, r),
                     "virtual_start": virtual_start(db, r),
+                    "rolling": bool(r["rolling"]),
                     "entries_open": _entries_open(db, r, int(time.time())),
                     "entries_close_at": _entries_close_at(db, r),
                     "results": ({"source": r["results_source"], "at": r["results_at"]}
@@ -789,15 +801,21 @@ def overview():
         entries.sort(key=lambda e: (0, e["finished_at"]) if e["finished_at"]
                      else (1, e["dtf"]))
         racing = [e for e in entries if not e["finished_at"]]
+        entries_open = _entries_open(db, r, now)
         if now < r["start_time"]:
             status = "upcoming"
-        elif entries and (not racing or now > r["start_time"] + 45 * 86400):
+        elif r["rolling"] and entries_open:
+            status = "racing"         # a rolling start is live while it takes entries
+        elif (entries and (not racing or now > r["start_time"] + 45 * 86400)) or \
+                (r["rolling"] and not racing):
             status = "finished"       # done, or dormant (retirees never finish)
         else:
             status = "racing"
         out.append({
             "id": r["id"], "name": r["name"], "description": r["description"],
             "start_time": r["start_time"], "status": status,
+            "rolling": bool(r["rolling"]), "entries_open": entries_open,
+            "entries_close_at": _entries_close_at(db, r),
             "course_len_nm": round(course_len),
             "polar_name": r["polar_name"],
             "marks": [[m["lat"], m["lon"]] for m in marks],
@@ -926,14 +944,18 @@ def _build_state(db, r, now, since=None):
     pts = lambda seq: [[p[1], p[2], p[0]] for p in seq]      # [lat, lon, t]
 
     entries = []
+    fleet_start = virtual_start(db, r) or r["start_time"]
     for b in db.execute("SELECT * FROM boats WHERE race_id=?", (race_id,)):
         m = vmeta.get(b["id"])
+        started_at = (b["started_at"] or fleet_start) if b["sim_time"] is not None else None
         entries.append({
             "type": "virtual", "id": b["id"], "name": b["name"], "klass": "virtual",
             "lat": b["lat"], "lon": b["lon"],
             "sog": m["bsp"] if m else None,
             "dtf": dtf_nm(b["lat"], b["lon"], marks, b["next_mark"]) if b["lat"] is not None else course_len,
             "finished_at": b["finished_at"], "started": b["sim_time"] is not None,
+            "started_at": started_at,
+            "elapsed_s": (b["finished_at"] - started_at) if b["finished_at"] and started_at else None,
             "has_route": b["id"] in routed, "maneuvers": b["maneuvers"] or 0,
             "owner": owners.get(b["owner_id"]),
             "track": pts(vtracks.get(b["id"], ())),
@@ -956,8 +978,14 @@ def _build_state(db, r, now, since=None):
             "track_n": m["n"] if m else 0, "last_t": m["last_t"] if m else None,
         })
 
+    rolling = bool(r["rolling"])
+
     def sort_key(e):
         if e["finished_at"]:
+            # a rolling start ranks finishers by their own elapsed time, a
+            # gun start by who got home first
+            if rolling and e.get("elapsed_s") is not None:
+                return (0, e["elapsed_s"])
             return (0, e["finished_at"])
         if not e["started"]:
             return (2, e["dtf"])
@@ -973,7 +1001,7 @@ def _build_state(db, r, now, since=None):
         else:
             e["rank"] = None
 
-    return {"now": now, "start_time": r["start_time"],
+    return {"now": now, "start_time": r["start_time"], "rolling": rolling,
             "fleet_gate": fleet_gate(db, r),
             "virtual_start": virtual_start(db, r),
             "course_len_nm": course_len,
@@ -1197,6 +1225,9 @@ def register_boat(race_id):
         return _err("Sign in to do that.", 401)
     now = int(time.time())
     if not _entries_open(db, race, now):
+        if race["rolling"]:
+            return _err(f"Entries for this edition closed {stamp(_entries_close_at(db, race))}; "
+                        "the next practice edition is on the race board.", 409)
         return _err(f"Entries closed at the scheduled start, "
                     f"{stamp(_entries_close_at(db, race))}. You can follow this race, "
                     "and enter the next one before its gun.", 409)
@@ -1325,7 +1356,12 @@ def submit_route(boat_id):
                 # treat this submission as the update it is
                 _start_unrouted(db, race, now)
                 b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
-            if b["sim_time"] is None:
+            if b["sim_time"] is None and race["rolling"] and now >= race["start_time"]:
+                # rolling start: the boat leaves the line now, on this routing
+                db.execute("UPDATE boats SET sim_time=?, started_at=?, lat=?, lon=?, "
+                           "next_mark=1 WHERE id=?",
+                           (now, now, marks[0]["lat"], marks[0]["lon"], b["id"]))
+            elif b["sim_time"] is None:
                 vs = virtual_start(db, race)
                 if vs is None:
                     # the real fleet has not started: the routing is kept and the
@@ -1336,8 +1372,9 @@ def submit_route(boat_id):
                 else:
                     # first routing before the gun: the boat waits on the line
                     # and the engine sends it off at the start
-                    db.execute("UPDATE boats SET sim_time=?, lat=?, lon=?, next_mark=1 WHERE id=?",
-                               (vs, marks[0]["lat"], marks[0]["lon"], b["id"]))
+                    db.execute("UPDATE boats SET sim_time=?, started_at=?, lat=?, lon=?, "
+                               "next_mark=1 WHERE id=?",
+                               (vs, vs, marks[0]["lat"], marks[0]["lon"], b["id"]))
             else:
                 catch_up_race(db, race["id"], now)   # lock the past before editing
             b = db.execute("SELECT * FROM boats WHERE id=?", (boat_id,)).fetchone()
@@ -1765,6 +1802,10 @@ def _tick():
     _tick_started_at = time.time()
     db = get_db()
     now = int(time.time())
+    try:
+        ensure_practice(db, now)         # always something to enter
+    except Exception:
+        log.exception("practice race could not be opened")
     live = []
     for r in db.execute("SELECT * FROM races").fetchall():
         if now < r["start_time"] - 72 * 3600 or now > r["start_time"] + 60 * 86400:

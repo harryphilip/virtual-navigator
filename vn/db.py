@@ -195,6 +195,8 @@ MIGRATIONS = [
     "ALTER TABLE races ADD COLUMN results_source TEXT",
     "ALTER TABLE races ADD COLUMN results_at INTEGER",
     "ALTER TABLE races ADD COLUMN docs_url TEXT DEFAULT ''",  # the organiser's own documents page, linked not hosted
+    "ALTER TABLE races ADD COLUMN rolling INTEGER DEFAULT 0",  # rolling start: enter any time, start when you submit a route (vn/practice.py)
+    "ALTER TABLE boats ADD COLUMN started_at INTEGER",         # this boat's own start (rolling races rank finishers by elapsed time)
 ]
 
 
