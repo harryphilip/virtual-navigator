@@ -60,6 +60,7 @@ jobs:
       - name: Deploy guard
         id: guard
         run: |
+          set -o pipefail    # the guard's exit status must survive the tee below
           last=$(flyctl releases --app virtual-navigator --json | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r[0]["CreatedAt"] if r else "")')
           force=""
           if [ "$FORCE_INPUT" = "true" ] || [[ "$COMMIT_MESSAGE" == *"[deploy]"* ]]; then force="--force"; fi
