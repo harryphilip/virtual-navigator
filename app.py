@@ -18,6 +18,7 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from vn import ais, mail, results, yb
+from vn.ais import name_matches
 from vn.compare import CompareError, compare
 from vn.db import add_race_log, delete_user, get_db
 from vn.fleetgate import fleet_gate, open_gate, stamp, virtual_start
@@ -1214,6 +1215,16 @@ def download_doc(doc_id):
 
 # ---------- virtual boats & routings ---------------------------------------
 
+def _real_boat_named(db, race_id, name):
+    """The real boat in this race whose name a virtual entry would collide
+    with (the AIS matching rules: case, punctuation and sponsor suffixes
+    ignored), or None."""
+    for rb in db.execute("SELECT name FROM real_boats WHERE race_id=?", (race_id,)):
+        if name_matches(name, rb["name"]) or name_matches(rb["name"], name):
+            return rb["name"]
+    return None
+
+
 @app.post("/api/races/<int:race_id>/boats")
 def register_boat(race_id):
     db = get_db()
@@ -1232,9 +1243,16 @@ def register_boat(race_id):
                     f"{stamp(_entries_close_at(db, race))}. You can follow this race, "
                     "and enter the next one before its gun.", 409)
     d = request.get_json(force=True)
-    name = (d.get("name") or "").strip()
+    name = " ".join((d.get("name") or "").split())
     if not name:
         return _err("Give the boat a name.")
+    if len(name) > 40:
+        return _err("Boat names are at most 40 characters.")
+    # a virtual boat may not wear a real competitor's name: the leaderboard
+    # would show two of them, and the real crew did not enter this game
+    taken = _real_boat_named(db, race_id, name)
+    if taken:
+        return _err(f"{taken} is a real boat in this race. Pick a name of your own.", 409)
     try:
         cur = db.execute(
             "INSERT INTO boats(race_id,name,pin_hash,created_at,owner_id) "
