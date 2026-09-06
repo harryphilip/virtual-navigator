@@ -328,6 +328,13 @@ is fixed on its own branch.
   holds the rule) and `scripts/retitle_race.py <id> <file>` applies a
   file's title and description to a live race.
 
+- Open-Meteo's free tier is non-commercial and capped at 10,000 calls a day
+  (5,000 an hour); `/healthz` carries an `open_meteo` gauge of this
+  process's calls in the last day and hour, by kind (`vn/quota.py`), and
+  the log warns once an hour past 80 % of the day's cap. Open-Meteo weights
+  multi-location and long-range requests as more than one call, so the
+  gauge is a floor. Past it, the answer is their Standard plan, not a
+  bigger cache.
 - Leaflet 1.9.4 is vendored under `public/vendor/leaflet/` (BSD-2-Clause)
   so the pages do not depend on a CDN, and the two typefaces (Archivo, IBM
   Plex Mono; SIL OFL) under `public/vendor/fonts/`, so no page load reaches

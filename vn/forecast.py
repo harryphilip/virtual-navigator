@@ -13,6 +13,7 @@ import math
 import time
 import urllib.request
 
+from . import quota
 from .grib import wind_grib
 
 FORECAST_HOURS = list(range(0, 121, 3))
@@ -88,6 +89,7 @@ def _fetch_batches(points):
         chunk = points[i:i + BATCH]
         url = API.format(lats=",".join(str(p[0]) for p in chunk),
                          lons=",".join(str(p[1]) for p in chunk))
+        quota.note_calls("forecast", len(chunk))
         with urllib.request.urlopen(url, timeout=30) as resp:
             data = json.loads(resp.read().decode())
         if isinstance(data, dict):

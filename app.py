@@ -27,6 +27,7 @@ from vn.nor import extract_race, MAX_DOC_BYTES
 from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to_gpx
 from vn.polar import Polar
 from vn.practice import ensure_practice
+from vn import quota
 from vn.realfleet import ingest_points
 from vn.geo import bearing_deg, haversine_nm
 from vn.sim import (SimBusy, catch_up_race, dtf_nm, enforce_course, get_marks, mark_side,
@@ -1914,7 +1915,8 @@ def healthz():
     body = {"ok": ok, "ticker": _ticker_started,
             "version": os.environ.get("VN_VERSION", "dev"),
             "last_tick_age_s": done_age, "tick_running_for_s": started_age if _ticker_started else None,
-            "weather": wind_health(db, int(now))}
+            "weather": wind_health(db, int(now)),
+            "open_meteo": quota.summary(now)}
     return jsonify(body), (200 if ok else 503)
 
 
