@@ -820,6 +820,8 @@ def overview():
         entries_open = _entries_open(db, r, now)
         if now < r["start_time"]:
             status = "upcoming"
+        elif r["results_at"]:
+            status = "finished"       # the committee has spoken; stragglers do not reopen it
         elif r["rolling"] and entries_open:
             status = "racing"         # a rolling start is live while it takes entries
         elif (entries and (not racing or now > r["start_time"] + 45 * 86400)) or \
