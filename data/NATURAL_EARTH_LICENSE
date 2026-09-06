@@ -1,0 +1,3 @@
+ne_50m_land.geojson is the Natural Earth 1:50m land data set
+(https://www.naturalearthdata.com/), public domain. Used by vn/land.py to
+check submitted routings for land crossings.
