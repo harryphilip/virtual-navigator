@@ -163,7 +163,11 @@ account type:
   last admin can't be removed), and `scripts/make_admin.py <username>` works
   from the server console as a recovery path.
 
-Race management goes through admin accounts only.
+Race management goes through admin accounts only. A virtual boat may not
+take a real competitor's name (the AIS matching rules decide what counts
+as the same name), and `scripts/remove_boat.py <race_id> <name> [reason]`
+removes a boat whose name breaks the terms, logging the removal on the
+race page.
 
 ## Auto-creating a race from the Notice of Race / SIs
 
