@@ -277,7 +277,41 @@ let my = null;   // { boatId } — the selected boat in this race, owned via ses
 let filter = 'all';
 let drawMode = false, drawWps = [];
 
-const map = L.map('map', { worldCopyJump: true }).setView([38, -60], 5);
+/* On a phone (or any narrow window) the chart sits at the top of a page
+   that scrolls underneath it, so a finger or a wheel over the chart must
+   scroll the page, not pan or zoom the chart. The chart stays locked until
+   the "Unlock chart" button is pressed; pinch-zoom and the +/- buttons
+   always work. On a wide screen the chart fills the viewport and the side
+   panel scrolls on its own, so it is always live. */
+const narrow = window.matchMedia('(max-width: 900px)');
+let chartUnlocked = false;
+const map = L.map('map', { worldCopyJump: true, scrollWheelZoom: !narrow.matches,
+                           dragging: !narrow.matches }).setView([38, -60], 5);
+const chartLock = L.control({ position: 'topleft' });
+chartLock.onAdd = () => {
+  const div = L.DomUtil.create('div', 'leaflet-bar chart-lock');
+  const a = L.DomUtil.create('a', '', div);
+  a.href = '#'; a.setAttribute('role', 'button'); a.setAttribute('aria-pressed', 'false');
+  L.DomEvent.disableClickPropagation(div);
+  L.DomEvent.on(a, 'click', ev => { L.DomEvent.preventDefault(ev); chartUnlocked = !chartUnlocked; applyChartLock(); });
+  div._a = a;
+  return div;
+};
+function applyChartLock() {
+  const live = !narrow.matches || chartUnlocked;
+  (live ? map.dragging.enable : map.dragging.disable).call(map.dragging);
+  (live ? map.scrollWheelZoom.enable : map.scrollWheelZoom.disable).call(map.scrollWheelZoom);
+  const c = chartLock.getContainer();
+  if (!c) return;
+  c.style.display = narrow.matches ? '' : 'none';
+  c._a.textContent = chartUnlocked ? 'Lock chart' : 'Unlock chart';
+  c._a.title = chartUnlocked ? 'Lock the chart so the page scrolls again'
+                             : 'Unlock the chart to drag it with one finger';
+  c._a.setAttribute('aria-pressed', String(chartUnlocked));
+}
+chartLock.addTo(map);
+applyChartLock();
+narrow.addEventListener('change', applyChartLock);
 
 /* base layers: NOAA ENC chart (US waters) and plain OpenStreetMap.
    NOAA serves ENC rendering via an ArcGIS export endpoint, so each 256px

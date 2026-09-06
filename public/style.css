@@ -225,6 +225,12 @@ form { margin: 0; }
   #map { height: 52vh; }
   .side { border-left: 0; }
 }
+/* the chart lock (narrow layouts only): a text button in the zoom bar's style */
+.chart-lock a {
+  width: auto; padding: 0 9px; font: 600 12px/30px var(--sans, system-ui, sans-serif);
+  letter-spacing: .02em; white-space: nowrap;
+}
+.chart-lock a[aria-pressed="true"] { background: var(--accent); color: #fff; }
 .lb-scroll { max-height: 46vh; overflow-y: auto; }
 .lb-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .lb-filters button {
