@@ -217,8 +217,35 @@ def get_db():
 
 
 def add_race_log(db, race_id, message, at=None):
-    """Append a committee-log entry — every course/zone/routing change goes
+    """Append a race-log entry — every course/zone/routing change goes
     here so competitors can see what happened, when, and why. Caller commits."""
     import time as _time
     db.execute("INSERT INTO race_log(race_id, at, message) VALUES (?,?,?)",
                (race_id, int(at or _time.time()), message))
+
+
+def delete_user(db, user_id):
+    """Erase an account: the user row, its sessions and reset tokens, and
+    every boat it entered with routes, track and submission log. Each race
+    the account had a boat in gets a log line naming the boat (not the
+    person). Commits. Returns the number of boats withdrawn; raises
+    ValueError for the last admin, who would lock everyone out."""
+    u = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    if not u:
+        return 0
+    if u["is_admin"] and db.execute(
+            "SELECT COUNT(*) c FROM users WHERE is_admin=1").fetchone()["c"] <= 1:
+        raise ValueError("This is the last admin account; make someone else admin first.")
+    boats = db.execute("SELECT id, race_id, name FROM boats WHERE owner_id=?",
+                       (user_id,)).fetchall()
+    for b in boats:
+        for t in ("route_wps", "route_log", "track"):
+            db.execute(f"DELETE FROM {t} WHERE boat_id=?", (b["id"],))
+        db.execute("DELETE FROM boats WHERE id=?", (b["id"],))
+        add_race_log(db, b["race_id"], f"{b['name']} withdrawn: the navigator's account was deleted.")
+    db.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+    db.execute("DELETE FROM password_resets WHERE user_id=?", (user_id,))
+    db.execute("UPDATE races SET created_by=NULL WHERE created_by=?", (user_id,))
+    db.execute("DELETE FROM users WHERE id=?", (user_id,))
+    db.commit()
+    return len(boats)

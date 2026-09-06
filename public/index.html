@@ -6,8 +6,7 @@
 <title>Virtual Navigator</title>
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/vendor/fonts/fonts.css">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -121,9 +120,11 @@
           <button type="button" class="ghost" id="a_show_login">I have an account</button>
         </div>
         <div class="msg" id="r_msg" aria-live="polite"></div>
-        <p class="small muted" style="margin:6px 0 0">3 to 30 characters for the username; letters,
-        digits, dash or underscore. Passwords are at least 6 characters. Your email is where password
-        resets and notices about your races go; other navigators never see it.</p>
+        <p class="small muted" style="margin:6px 0 0">You must be 16 or over. By creating an account
+        you accept the <a href="/terms">terms</a> and the <a href="/privacy">privacy notice</a>.
+        3 to 30 characters for the username; letters, digits, dash or underscore. Passwords are at
+        least 6 characters. Your email is where password resets and notices about your races go;
+        other navigators never see it.</p>
       </form>
     </div>
     <div id="acct_in" style="display:none" class="small"></div>
@@ -231,12 +232,7 @@
     rel="noopener">OpenStreetMap</a> contributors, OpenSeaMap. Bathymetry: NOAA NCEI.
     Polars: meltemus.com. Real-boat positions: YB Tracking and aisstream.io, shown
     for comparison only. Not affiliated with any race organiser.</p>
-    <p><b>Your data.</b> An account is a username, a display name and a password
-    hash and an email address, used for password-reset links and notices
-    about your races. Sailed tracks and
-    submission times are public; future waypoints are not. The session cookie
-    lasts 90 days. Pages load fonts from Google and map tiles from OpenStreetMap
-    and NOAA, which see your IP address.</p>
+    <p><b>Your data.</b> An account is a username, a display name, a password hash and an email address. Sailed tracks and submission times are public; future waypoints are not. Fonts are served from this site; map tiles come from OpenStreetMap and NOAA, which see your IP address. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · you can delete your account from your profile page.</p>
     <p><a href="https://github.com/harryphilip/virtual-navigator" rel="noopener">Source on GitHub</a>, MIT licence. Leaflet is BSD-2-Clause.</p>
   </footer>
 </main>
@@ -249,6 +245,11 @@ async function initAccount() {
   const u = await vnMe();
   const isAdmin = !!(u && u.is_admin);
   document.getElementById('acct_out').style.display = u ? 'none' : 'block';
+  if (!u && new URLSearchParams(location.search).get('deleted') === '1') {
+    const m = document.getElementById('a_msg');
+    m.className = 'msg ok'; m.textContent = 'Your account and its boats have been deleted.';
+    history.replaceState(null, '', '/');
+  }
   const acctIn = document.getElementById('acct_in');
   acctIn.style.display = u ? 'block' : 'none';
   if (u) {

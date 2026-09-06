@@ -19,7 +19,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from vn import ais, mail, results, yb
 from vn.compare import CompareError, compare
-from vn.db import add_race_log, get_db
+from vn.db import add_race_log, delete_user, get_db
 from vn.fleetgate import fleet_gate, open_gate, stamp, virtual_start
 from vn.forecast import make_snapshot
 from vn.nor import extract_race, MAX_DOC_BYTES
@@ -322,6 +322,16 @@ def how_page():
     return send_from_directory("public", "how.html")
 
 
+@app.get("/privacy")
+def privacy_page():
+    return send_from_directory("public", "privacy.html")
+
+
+@app.get("/terms")
+def terms_page():
+    return send_from_directory("public", "terms.html")
+
+
 @app.get("/reset")
 def reset_page():
     return send_from_directory("public", "reset.html")
@@ -424,6 +434,28 @@ def auth_set_email():
     db.execute("UPDATE users SET email=? WHERE id=?", (email, u["id"]))
     db.commit()
     return jsonify({"ok": True, "email": email})
+
+
+@app.post("/api/auth/delete")
+def auth_delete_account():
+    """Delete the signed-in account: the user row, every session and reset
+    token, and every boat it entered with its routes, tracks and submission
+    log. Confirmed with the password. Race logs keep their entries (they
+    name boats, not people). The last admin cannot delete itself."""
+    db = get_db()
+    u = current_user(db)
+    if not u:
+        return _err("Sign in to do that.", 401)
+    d = request.get_json(force=True)
+    if _hash_pw(d.get("password") or "", u["salt"]) != u["pass_hash"]:
+        return _err("That is not your password.", 403)
+    try:
+        delete_user(db, u["id"])
+    except ValueError as e:
+        return _err(str(e), 409)
+    resp = jsonify({"ok": True})
+    resp.set_cookie(SESSION_COOKIE, "", max_age=0, path="/")
+    return resp
 
 
 @app.post("/api/auth/forgot")
