@@ -929,8 +929,15 @@ def _build_state(db, r, now, since=None):
             return (2, e["dtf"])
         return (1, e["dtf"])
     entries.sort(key=sort_key)
-    for i, e in enumerate(entries):
-        e["rank"] = i + 1
+    # a boat that has not started (or a real boat that never reported a
+    # fix) has no place on the leaderboard yet: no rank, not a last place
+    n = 0
+    for e in entries:
+        if e["started"] or e["finished_at"]:
+            n += 1
+            e["rank"] = n
+        else:
+            e["rank"] = None
 
     return {"now": now, "start_time": r["start_time"],
             "fleet_gate": fleet_gate(db, r),
@@ -1591,11 +1598,26 @@ def race_compare(race_id):
     boat speed (the real boat against the race polar on its own track),
     navigation (where each boat went) and start offset — see vn/compare.py.
     Without ?virtual= only the real boat's polar report is returned.
-    Tracks are public, so the analysis is too."""
+
+    Tracks are public; a verdict on a named real boat is not. A navigator
+    who has entered a boat in this race may compare any two boats and sees
+    the gap split, never the real boat's own "% of polar" or its per-band
+    table — that report exists to tune the polar and is for admins."""
     db = get_db()
     r = _race_or_404(db, race_id)
     if not r:
         return _err("race not found", 404)
+    u = current_user(db)
+    admin = bool(u and u["is_admin"])
+    if not admin:
+        if not u:
+            return _err("Sign in and enter a boat in this race to compare it "
+                        "with the fleet.", 401)
+        if not db.execute("SELECT 1 FROM boats WHERE race_id=? AND owner_id=?",
+                          (race_id, u["id"])).fetchone():
+            return _err("Enter a boat in this race to compare it with the fleet.", 403)
+        if not request.args.get("virtual"):
+            return _err("Pick a virtual boat to compare with.")
     try:
         rb_id = int(request.args.get("real", ""))
     except ValueError:
@@ -1622,16 +1644,30 @@ def race_compare(race_id):
     memo_id = (rb_id, boat["id"] if boat else None)
     hit = _compare_memo.get(memo_id)
     if hit and hit[0] == key:
-        return jsonify(hit[1])
-    marks = get_marks(db, race_id)
-    try:
-        out = compare(db, r, marks, rb, boat)
-    except CompareError as e:
-        return _err(str(e), 409)
-    if len(_compare_memo) >= COMPARE_MEMO_MAX:
-        _compare_memo.pop(next(iter(_compare_memo)))
-    _compare_memo[memo_id] = (key, out)
-    return jsonify(out)
+        out = hit[1]
+    else:
+        marks = get_marks(db, race_id)
+        try:
+            out = compare(db, r, marks, rb, boat)
+        except CompareError as e:
+            return _err(str(e), 409)
+        if len(_compare_memo) >= COMPARE_MEMO_MAX:
+            _compare_memo.pop(next(iter(_compare_memo)))
+        _compare_memo[memo_id] = (key, out)
+    return jsonify(out if admin else _without_polar_verdict(out))
+
+
+def _without_polar_verdict(out):
+    """The compare result as a navigator sees it: the real boat's speed
+    against the polar stays in the gap split (hours), but the percentage
+    and the per-band table on a named real boat are left to admins."""
+    pub = dict(out)
+    if pub.get("real"):
+        real = dict(pub["real"])
+        for k in ("pct_polar", "by_pos", "by_tws"):
+            real.pop(k, None)
+        pub["real"] = real
+    return pub
 
 
 # ---------- on-board forecast snapshots -------------------------------------

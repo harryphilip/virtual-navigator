@@ -185,7 +185,7 @@
         <b style="color:var(--text)">Navigation</b>: everything else, meaning
         where each boat went, and when. Click a leaderboard row to pick a
         boat.</p>
-      <div class="row">
+      <div class="row" id="cmp_pick">
         <div><label for="cmp_real">Real boat</label><select id="cmp_real"></select></div>
         <div><label for="cmp_virtual">Virtual boat</label><select id="cmp_virtual"></select></div>
       </div>
@@ -655,7 +655,9 @@ function drawLeaderboard() {
       ? `<span class="badge" title="official result">${esc(o.status)}</span>`
       : e.finished_at
       ? `<span class="badge fin" title="${o ? 'official finish time' : 'finish seen on the tracker'}">finished${o ? ' ·' : ''}${o && o.place_class ? ' ' + o.place_class + ordinal(o.place_class) : ''}</span>`
-      : !e.started ? '<span class="badge">not started</span>'
+      : !e.started ? (e.type === 'real' && state.now > state.start_time
+          ? '<span class="badge" title="the tracker has not reported this boat">no tracker data</span>'
+          : '<span class="badge">not started</span>')
       : e.type === 'real' ? `<span class="badge real">${esc(e.klass)}</span>`
       : '<span class="badge virtual">virtual</span>';
     const nm = e.owner
@@ -714,17 +716,38 @@ function fillCompare() {
   const virts = state.entries.filter(e => e.type === 'virtual' && e.started);
   if (!reals.length) { card.style.display = 'none'; return; }
   card.style.display = 'block';
+  // The gap split is for navigators with a boat in this race; a verdict on
+  // a named real boat (its % of polar) is for admins only.
+  const isAdmin = !!(me && me.is_admin);
+  const pick = document.getElementById('cmp_pick'), out = document.getElementById('cmp_out');
+  if (!isAdmin && !my) {
+    pick.style.display = 'none';
+    out.innerHTML = `<span class="muted">${me
+      ? 'Enter a boat in this race to compare it with the real fleet.'
+      : 'Sign in and enter a boat in this race to compare it with the real fleet.'}</span>`;
+    cmpLastQ = '';
+    return;
+  }
+  pick.style.display = '';
   if (!reals.some(e => e.id === cmpSel.real)) cmpSel.real = reals[0].id;
   if (cmpSel.virtual === undefined ||
-      (cmpSel.virtual !== '' && !virts.some(e => e.id === cmpSel.virtual))) {
+      (cmpSel.virtual !== '' && !virts.some(e => e.id === cmpSel.virtual)) ||
+      (cmpSel.virtual === '' && !isAdmin)) {
     const mine = my && virts.find(e => e.id === my.boatId);
     cmpSel.virtual = mine ? mine.id : (virts.length ? virts[0].id : '');
+  }
+  if (!isAdmin && cmpSel.virtual === '') {
+    pick.style.display = 'none';
+    out.innerHTML = '<span class="muted">No virtual boat is under way yet; the comparison starts with the fleet.</span>';
+    cmpLastQ = '';
+    return;
   }
   const opt = e => `<option value="${e.id}">${esc(e.name)}` +
     `${e.type === 'real' && e.klass ? ' · ' + esc(e.klass) : ''}</option>`;
   const rs = document.getElementById('cmp_real'), vs = document.getElementById('cmp_virtual');
   rs.innerHTML = reals.map(opt).join('');
-  vs.innerHTML = '<option value="">No virtual boat (polar report only)</option>' + virts.map(opt).join('');
+  vs.innerHTML = (isAdmin ? '<option value="">No virtual boat (polar report only)</option>' : '') +
+    virts.map(opt).join('');
   rs.value = String(cmpSel.real);
   vs.value = String(cmpSel.virtual);
   runCompare();
@@ -838,7 +861,9 @@ function renderCompare(c) {
       const k = c.components;
       const rows = [
         ['Boat speed', k.boat_speed_h,
-         `${r.name} sailed at ${pct(r.pct_polar)} of the race polar on its own track`],
+         r.pct_polar == null
+           ? `${r.name}'s own track re-sailed at race-polar speed through the same wind`
+           : `${r.name} sailed at ${pct(r.pct_polar)} of the race polar on its own track`],
         ['Navigation', k.navigation_h,
          'where each boat went and when: wind found, miles sailed, tacks made'],
         ['Start', k.start_h, 'difference in start time'],
@@ -860,21 +885,25 @@ function renderCompare(c) {
       ` at <b>${pct(r.pct_polar)}</b> of the race polar.</p>`;
   }
 
-  const band = b => `<tr><td>${esc(b.band)}</td><td>${pct(b.share == null ? null : b.share * 100)}</td>` +
-    `<td>${pct(b.pct_polar)}</td></tr>`;
-  h += `<h3>${esc(r.name)} vs the race polar</h3>` +
-    '<table class="list cmp-table"><thead><tr><th>Point of sail</th><th>time</th><th>% polar</th></tr></thead><tbody>' +
-    r.by_pos.map(band).join('') +
-    '<tr><th>Wind</th><th></th><th></th></tr>' + r.by_tws.map(band).join('') +
-    `<tr><td><b>overall</b></td><td>${Math.round(r.distance_nm)} nm</td><td><b>${pct(r.pct_polar)}</b></td></tr>` +
-    '</tbody></table>' +
-    `<div class="muted" style="margin-top:4px">The race polar is ${esc(c.polar_name)} scaled to ${perf}%` +
-    (r.pct_polar == null ? '' : `, so ${esc(r.name)} sails at ${pct(r.pct_polar * c.perf_factor)} of the raw polar`) +
-    '.</div>';
+  // the real boat's polar report (admins only: it tunes the polar, and is a
+  // verdict on a named crew)
+  if (r.by_pos && r.by_tws) {
+    const band = b => `<tr><td>${esc(b.band)}</td><td>${pct(b.share == null ? null : b.share * 100)}</td>` +
+      `<td>${pct(b.pct_polar)}</td></tr>`;
+    h += `<h3>${esc(r.name)} vs the race polar</h3>` +
+      '<table class="list cmp-table"><thead><tr><th>Point of sail</th><th>time</th><th>% polar</th></tr></thead><tbody>' +
+      r.by_pos.map(band).join('') +
+      '<tr><th>Wind</th><th></th><th></th></tr>' + r.by_tws.map(band).join('') +
+      `<tr><td><b>overall</b></td><td>${Math.round(r.distance_nm)} nm</td><td><b>${pct(r.pct_polar)}</b></td></tr>` +
+      '</tbody></table>' +
+      `<div class="muted" style="margin-top:4px">The race polar is ${esc(c.polar_name)} scaled to ${perf}%` +
+      (r.pct_polar == null ? '' : `, so ${esc(r.name)} sails at ${pct(r.pct_polar * c.perf_factor)} of the raw polar`) +
+      '.</div>';
+  }
 
   if (v) {
     const row = (lab, a, b) => `<tr><td>${lab}</td><td>${a}</td><td>${b}</td></tr>`;
-    const up = s => { const u = s.by_pos.find(b => b.band === 'upwind'); return pct(u && u.share != null ? u.share * 100 : null); };
+    const up = s => { const u = s.by_pos && s.by_pos.find(b => b.band === 'upwind'); return pct(u && u.share != null ? u.share * 100 : null); };
     h += '<h3>Route</h3><table class="list cmp-table"><thead><tr><th></th>' +
       `<th>${esc(r.name)}</th><th>${esc(v.name)}</th></tr></thead><tbody>` +
       row('elapsed', fmtDur(r.elapsed_h), fmtDur(v.elapsed_h)) +
@@ -897,6 +926,7 @@ async function showManage() {
   const boats = me ? await api(`/api/races/${raceId}/my_boats`) : [];
   if (boats.length && !my) my = { boatId: boats[0].id };
   if (my && !boats.some(b => b.id === my.boatId)) my = boats.length ? { boatId: boats[0].id } : null;
+  if (state) fillCompare();          // who may compare depends on who is signed in
   const src = state || race;
   const open = !src || src.entries_open !== false;
   const closedAt = race && race.entries_close_at ? vnTime(race.entries_close_at) : null;
