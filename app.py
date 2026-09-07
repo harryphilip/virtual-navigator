@@ -694,8 +694,10 @@ def race_detail(race_id):
     marks = [{"seq": m["seq"], "name": m["name"], "lat": m["lat"], "lon": m["lon"],
               "side": mark_side(m)}
              for m in get_marks(db, race_id)]
+    status, why = race_status(db, r, int(time.time()))
     return jsonify({"id": r["id"], "name": r["name"], "description": r["description"],
                     "docs_url": r["docs_url"] or "",
+                    "status": status, "status_reason": why,
                     "start_time": r["start_time"], "perf_factor": r["perf_factor"],
                     "step_minutes": r["step_minutes"], "mark_radius_nm": r["mark_radius_nm"],
                     "polar_name": r["polar_name"], "marks": marks,
@@ -786,6 +788,37 @@ def race_polar_text(race_id):
                              f'attachment; filename="race{race_id}_polar.pol"'})
 
 
+DORMANT_DAYS = 45
+
+
+def race_status(db, r, now):
+    """("upcoming" | "racing" | "finished", reason). A race is complete when
+    the committee's results have been imported, when every boat that
+    started has finished, or when nothing has finished for DORMANT_DAYS
+    after the gun (retirees never finish). A rolling-start race stays live
+    while it takes entries."""
+    if now < r["start_time"]:
+        return "upcoming", ""
+    if r["results_at"]:
+        return "finished", "official results imported"
+    started, unfinished = 0, 0
+    for tbl, cond in (("boats", "sim_time IS NOT NULL"), ("real_boats", "last_t IS NOT NULL")):
+        row = db.execute(
+            f"SELECT COUNT(*) n, SUM(finished_at IS NULL) u FROM {tbl} "
+            f"WHERE race_id=? AND {cond}", (r["id"],)).fetchone()
+        started += row["n"]
+        unfinished += row["u"] or 0
+    if r["rolling"] and _entries_open(db, r, now):
+        return "racing", "taking entries"
+    if started and not unfinished:
+        return "finished", "every boat has finished"
+    if started and now > r["start_time"] + DORMANT_DAYS * 86400:
+        return "finished", f"no finish in {DORMANT_DAYS} days"
+    if r["rolling"] and not unfinished:
+        return "finished", "every boat has finished"
+    return "racing", ""
+
+
 @app.get("/api/overview")
 def overview():
     """Light snapshot for the home page: every race with its course line,
@@ -816,22 +849,11 @@ def overview():
                 "dtf": dtf_nm(rb["last_lat"], rb["last_lon"], marks, rb["next_mark"])})
         entries.sort(key=lambda e: (0, e["finished_at"]) if e["finished_at"]
                      else (1, e["dtf"]))
-        racing = [e for e in entries if not e["finished_at"]]
         entries_open = _entries_open(db, r, now)
-        if now < r["start_time"]:
-            status = "upcoming"
-        elif r["results_at"]:
-            status = "finished"       # the committee has spoken; stragglers do not reopen it
-        elif r["rolling"] and entries_open:
-            status = "racing"         # a rolling start is live while it takes entries
-        elif (entries and (not racing or now > r["start_time"] + 45 * 86400)) or \
-                (r["rolling"] and not racing):
-            status = "finished"       # done, or dormant (retirees never finish)
-        else:
-            status = "racing"
+        status, why = race_status(db, r, now)
         out.append({
             "id": r["id"], "name": r["name"], "description": r["description"],
-            "start_time": r["start_time"], "status": status,
+            "start_time": r["start_time"], "status": status, "status_reason": why,
             "rolling": bool(r["rolling"]), "entries_open": entries_open,
             "entries_close_at": _entries_close_at(db, r),
             "course_len_nm": round(course_len),

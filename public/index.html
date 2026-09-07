@@ -393,7 +393,7 @@ async function loadRaces() {
     const badge = r.rolling && r.entries_open ? '<span class="badge fin">open · rolling start</span>'
       : r.status === 'racing' ? '<span class="badge fin">racing</span>'
       : r.status === 'upcoming' ? '<span class="badge real">upcoming</span>'
-      : '<span class="badge virtual">finished</span>';
+      : `<span class="badge virtual" title="${esc(r.status_reason || '')}">complete</span>`;
     let body = '';
     if (r.rolling && r.entries_open && !r.top.length) {
       body = `<div class="small muted">Enter any time until ${vnTime(r.entries_close_at)}; your boat starts the moment you submit a route.</div>`;
