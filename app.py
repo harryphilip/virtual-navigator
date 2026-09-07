@@ -27,7 +27,8 @@ from vn.nor import extract_race, MAX_DOC_BYTES
 from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to_gpx
 from vn.polar import Polar
 from vn.practice import ensure_practice
-from vn import land, quota
+from vn import backup, land, quota
+import vn.db as vndb
 from vn.realfleet import ingest_points
 from vn.geo import bearing_deg, haversine_nm
 from vn.sim import (SimBusy, catch_up_race, dtf_nm, enforce_course, get_marks, mark_side,
@@ -1906,6 +1907,13 @@ def _tick():
     except Exception:
         log.exception("weather heal failed")
 
+    # once a day, a copy of the database leaves the box (vn/backup.py; quiet
+    # until a bucket is configured)
+    try:
+        backup.nightly(vndb.DB_PATH)
+    except Exception:
+        log.exception("backup failed")
+
     # weather health is judged per race, over the water that race sails, and
     # every transition goes on that race's committee log
     for r in live:
@@ -1969,7 +1977,8 @@ def healthz():
             "version": os.environ.get("VN_VERSION", "dev"),
             "last_tick_age_s": done_age, "tick_running_for_s": started_age if _ticker_started else None,
             "weather": wind_health(db, int(now)),
-            "open_meteo": quota.summary(now)}
+            "open_meteo": quota.summary(now),
+            "backup": backup.summary()}
     return jsonify(body), (200 if ok else 503)
 
 
