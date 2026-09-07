@@ -1,6 +1,6 @@
 {
   "name": "New York to Lorient",
-  "description": "Sailed alongside the IMOCA fleet of The Ocean Race Atlantic: New York to Lorient, ~3,200 nm across the North Atlantic, the first 50/50 gender-parity fully-crewed transatlantic race. Virtual start 14:00 UTC 2 Sep — the real gun, postponed from the planned start while the fleet cleared the marine-mammal go-slow areas out of New York. Exclusion zones (drawn red on the map) drag virtual boats to half speed inside. Polar: legacy (non-foiling) IMOCA 60 at 95% — the real foilers will be faster; the virtual fleet all sails the same numbers. Route yourself across: great circle vs. ridge-dodging is the whole game.",
+  "description": "Sailed alongside the IMOCA fleet of The Ocean Race Atlantic: New York to Lorient, ~3,200 nm across the North Atlantic, the first 50/50 gender-parity fully-crewed transatlantic race. Virtual start 14:00 UTC 2 Sep — the real gun, postponed from the planned start while the fleet cleared the marine-mammal go-slow areas out of New York. Exclusion zones (drawn red on the map) drag virtual boats to half speed inside. Polar: legacy (non-foiling) IMOCA 60 at 95% — the real foilers will be faster; the virtual fleet all sails the same numbers. Clearance marks south-east of Cape Race and off Penmarc'h keep the straight line at sea. Route yourself across: great circle vs. ridge-dodging is the whole game.",
   "docs_url": "https://www.theoceanrace.com/",
   "start_time": "2026-09-02T14:00:00Z",
   "polar_name": "IMOCA Open 60 (non-foiling)",
@@ -12,7 +12,25 @@
   "currents_enabled": true,
   "grounding_depth_ft": 15,
   "marks": [
-    {"name": "Start — offshore New York", "lat": 40.10, "lon": -71.70},
-    {"name": "Finish — Lorient approach", "lat": 47.70, "lon": -3.37}
+    {
+      "name": "Start — offshore New York",
+      "lat": 40.1,
+      "lon": -71.7
+    },
+    {
+      "name": "Cape Race clearance",
+      "lat": 46.0,
+      "lon": -52.5
+    },
+    {
+      "name": "Penmarc'h clearance",
+      "lat": 47.7,
+      "lon": -4.5
+    },
+    {
+      "name": "Finish — Lorient approach",
+      "lat": 47.7,
+      "lon": -3.37
+    }
   ]
 }

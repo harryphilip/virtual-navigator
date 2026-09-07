@@ -1,6 +1,6 @@
 {
   "name": "Antigua round the islands 600",
-  "description": "Sailed alongside the fleet of the RORC Caribbean 600 (18th edition): ~600 nm non-stop around 11 Caribbean islands, starting and finishing in Antigua. Start 15:00 UTC (11:00 local) Mon 22 Feb 2027 (exact gun to be confirmed in the Notice of Race — the virtual start will match). Course: north round Barbuda, southwest to Nevis, up past Saba, St Barths and Tintamarre off St Martin, then the long leg south round the Saintes below Guadeloupe, La Désirade, Barbuda again, Redonda, and home. Marks sit just offshore of each rounding. Polar: Class40 (meltemus.com) at 90%; everyone sails the same numbers.",
+  "description": "Sailed alongside the fleet of the RORC Caribbean 600 (18th edition): ~600 nm non-stop around 11 Caribbean islands, starting and finishing in Antigua. Start 15:00 UTC (11:00 local) Mon 22 Feb 2027 (exact gun to be confirmed in the Notice of Race — the virtual start will match). Course: east of Antigua, up the east side of Barbuda and round its north, southwest to Nevis, up past Saba, St Barths and Tintamarre off St Martin, then the long leg south round the Saintes below Guadeloupe, La Désirade, up the east side of Barbuda again, Redonda, and home. Montserrat lies on the St Martin to Guadeloupe leg; leave it either side until the sailing instructions say. Marks sit just offshore of each rounding. Polar: Class40 (meltemus.com) at 90%; everyone sails the same numbers.",
   "docs_url": "https://caribbean600.rorc.org/",
   "start_time": "2027-02-22T15:00:00Z",
   "polar_name": "Class40 (meltemus.com)",
@@ -14,18 +14,28 @@
   "marks": [
     {
       "name": "Start — Fort Charlotte, Antigua",
-      "lat": 17.0,
-      "lon": -61.79
+      "lat": 16.98,
+      "lon": -61.78
+    },
+    {
+      "name": "Antigua E clearance",
+      "lat": 17.05,
+      "lon": -61.6
+    },
+    {
+      "name": "Barbuda E",
+      "lat": 17.6,
+      "lon": -61.64
     },
     {
       "name": "Barbuda N",
-      "lat": 17.78,
-      "lon": -61.8
+      "lat": 17.83,
+      "lon": -61.9
     },
     {
       "name": "Nevis S",
-      "lat": 17.06,
-      "lon": -62.65
+      "lat": 17.03,
+      "lon": -62.58
     },
     {
       "name": "Saba W",
@@ -53,9 +63,14 @@
       "lon": -60.98
     },
     {
+      "name": "Barbuda E (second pass)",
+      "lat": 17.6,
+      "lon": -61.64
+    },
+    {
       "name": "Barbuda N (second pass)",
-      "lat": 17.78,
-      "lon": -61.8
+      "lat": 17.83,
+      "lon": -61.9
     },
     {
       "name": "Redonda",
@@ -64,7 +79,7 @@
     },
     {
       "name": "Finish — English Harbour, Antigua",
-      "lat": 17.0,
+      "lat": 16.98,
       "lon": -61.74
     }
   ]
