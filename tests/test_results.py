@@ -207,3 +207,30 @@ def test_imported_results_close_the_race(client, db):
     results.apply_results(db, race, matches, "yachtscoring:1#1")
     assert live_ais_races(db) == []
     assert [r["status"] for r in client.get("/api/overview").get_json() if r["id"] == race_id] == ["finished"]
+
+
+def test_race_status_rules(client, db):
+    """Complete when every started boat has finished, or when official
+    results are in; racing otherwise; upcoming before the gun."""
+    import time
+    from tests.conftest import make_boat
+    now = int(time.time())
+    race_id = fleet(db)
+    info = lambda: client.get(f"/api/races/{race_id}").get_json()
+    db.execute("UPDATE races SET start_time=? WHERE id=?", (now + 3600, race_id)); db.commit()
+    assert info()["status"] == "upcoming"
+    db.execute("UPDATE races SET start_time=? WHERE id=?", (now - 86400, race_id)); db.commit()
+    a = make_boat(db, race_id, name="A", started_at=now - 86400)
+    b = make_boat(db, race_id, name="B", started_at=now - 86400)
+    assert info()["status"] == "racing"
+    db.execute("UPDATE boats SET finished_at=? WHERE id=?", (now - 3600, a)); db.commit()
+    assert info()["status"] == "racing"                       # B still out
+    db.execute("UPDATE boats SET finished_at=? WHERE id=?", (now - 1800, b)); db.commit()
+    assert info()["status"] == "finished" and info()["status_reason"] == "every boat has finished"
+    # a boat still sailing keeps it open, until the committee's results arrive
+    c = make_boat(db, race_id, name="C", started_at=now - 3600)
+    assert info()["status"] == "racing"
+    db.execute("UPDATE races SET results_source='csv', results_at=? WHERE id=?", (now, race_id)); db.commit()
+    assert info()["status"] == "finished" and info()["status_reason"] == "official results imported"
+    board = [r for r in client.get("/api/overview").get_json() if r["id"] == race_id][0]
+    assert board["status"] == "finished" and board["status_reason"] == "official results imported"

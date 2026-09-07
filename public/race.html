@@ -33,6 +33,7 @@
         comparison only. <a id="rh_docs" href="#" rel="noopener" style="display:none">Official
         race documents</a></p>
       <dl class="facts small">
+        <dt>Status</dt><dd id="rh_status"></dd>
         <dt>Start</dt><dd id="rh_start"></dd>
         <dt>Virtual start</dt><dd id="rh_gate"></dd>
         <dt>Course</dt><dd id="rh_course"></dd>
@@ -376,6 +377,9 @@ async function loadRace() {
   document.getElementById('rh_name').textContent = race.name;
   document.getElementById('rh_desc').textContent = race.description || '';
   document.getElementById('rh_desc').style.display = race.description ? '' : 'none';
+  const label = { upcoming: 'Upcoming', racing: 'Racing', finished: 'Complete' }[race.status] || '';
+  document.getElementById('rh_status').textContent =
+    label + (race.status_reason ? ` · ${race.status_reason}` : '');
   const docsA = document.getElementById('rh_docs');
   docsA.href = race.docs_url || '#';
   docsA.style.display = race.docs_url ? '' : 'none';
