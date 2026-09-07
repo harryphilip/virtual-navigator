@@ -298,11 +298,21 @@ is sailed through and cannot be rewound. That is the reason for the care.
 
 ### Backups
 
-The Action snapshots the Fly volume before every deploy. Fly also keeps
-automatic daily snapshots for a few days. To restore, create a new volume
-from a snapshot and attach it (`fly volumes snapshots list <vol>`, then
-`fly volumes create vn_data --snapshot-id <id>`), and rehearse that once on
-staging before you need it.
+The Action snapshots the Fly volume before every deploy, and Fly keeps
+automatic daily snapshots for a few days. `scripts/restore_rehearsal.sh`
+restores one the way it would be done for real (new volume from the
+snapshot, cloned Machine, health check, retire the old pair), on staging
+by default; run it once before you need it.
+
+Snapshots live with the same provider as the volume, so a copy also
+leaves the box once a day: `vn/backup.py` takes a consistent SQLite copy,
+gzips it and PUTs it to an S3-compatible bucket (Signature V4, no SDK),
+after 03:00 UTC, when the bucket is configured. The settings are exactly
+what `fly storage create` (Tigris) writes as secrets — `BUCKET_NAME`,
+`AWS_ENDPOINT_URL_S3`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+`AWS_REGION` — so any S3 store works with the same five.
+`scripts/backup_now.py` takes one by hand; `/healthz` shows the last
+result under `backup`. Set a lifecycle rule on the bucket for retention.
 
 ## Tests
 
