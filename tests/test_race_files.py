@@ -36,3 +36,14 @@ def test_description_names_the_official_race_once():
         assert desc.startswith("Sailed alongside the "), f"{fname}: {desc[:60]!r}"
         assert "rolex" not in desc.lower(), fname
         assert "virtual edition" not in desc.lower(), fname
+
+
+def test_straight_line_courses_stay_at_sea():
+    """A boat with no route at the gun sails the marks in a straight line,
+    so no leg of a committed course may cross more than the 5 nm of land
+    the route checker tolerates (harbour walls, islands drawn fat)."""
+    from vn import land
+    for fname, d in _races():
+        pts = [(m["lat"], m["lon"]) for m in d["marks"]]
+        bad = [c for c in land.crossings(pts) if c["land_nm"] > land.REJECT_NM]
+        assert not bad, f"{fname}: {[land.describe(c) for c in bad]}"
