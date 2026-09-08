@@ -14,12 +14,13 @@ import time
 import urllib.request
 
 from . import quota
-from .grib import wind_grib
+from .grib import read_messages, wind_grib
 
 FORECAST_HOURS = list(range(0, 121, 3))
 MAX_POINTS = 240
 BATCH = 60
 KN_TO_MS = 0.514444
+MS_TO_KN = 1.0 / KN_TO_MS
 
 API = ("https://api.open-meteo.com/v1/forecast?latitude={lats}&longitude={lons}"
        "&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms"
@@ -104,3 +105,38 @@ def _fetch_batches(points):
                     m[int(t)] = (float(spd), float(deg))
             series.append(m)
     return series
+
+
+def latest_field(db, race_id):
+    """The newest snapshot for a race decoded back into a wind field the
+    chart can draw: the grid corner and spacing, and for every forecast
+    hour the valid time and u/v components in knots, row-major from the
+    north-west corner (west→east, then north→south — the GRIB's own order).
+    None when the race has no snapshot yet."""
+    row = db.execute(
+        "SELECT id, issued_at, grib FROM forecast_snapshots WHERE race_id=? "
+        "ORDER BY issued_at DESC, id DESC LIMIT 1", (race_id,)).fetchone()
+    if row is None:
+        return None
+    return decode_field(row["id"], row["issued_at"], row["grib"])
+
+
+def decode_field(snap_id, issued, blob):
+    """Read our own GRIB back (vn.grib.read_messages) and pair the U and V
+    messages of each forecast hour."""
+    by_hour = {}
+    grid = None
+    for param, p1, la1, lo1, step, ni, nj, values in read_messages(blob):
+        grid = grid or {"la1": la1, "lo1": lo1, "step": step, "ni": ni, "nj": nj}
+        by_hour.setdefault(p1, {})[param] = values
+    frames = []
+    for fh in sorted(by_hour):
+        u, v = by_hour[fh].get(33), by_hour[fh].get(34)
+        if u is None or v is None:
+            continue
+        frames.append({"fh": fh, "t": issued + fh * 3600,
+                       "u": [round(x * MS_TO_KN, 1) for x in u],
+                       "v": [round(x * MS_TO_KN, 1) for x in v]})
+    if grid is None or not frames:
+        return None
+    return {"id": snap_id, "issued_at": issued, **grid, "frames": frames}
