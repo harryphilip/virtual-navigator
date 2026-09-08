@@ -17,7 +17,8 @@ from . import quota
 from .grib import read_messages, wind_grib
 
 FORECAST_HOURS = list(range(0, 121, 3))
-MAX_POINTS = 240
+MAX_POINTS = 600       # ten API calls per snapshot at most
+PAD_DEG = 2.5          # beyond the marks and the fleet: six hours at 20 kn is 2°
 BATCH = 60
 KN_TO_MS = 0.514444
 MS_TO_KN = 1.0 / KN_TO_MS
@@ -27,9 +28,27 @@ API = ("https://api.open-meteo.com/v1/forecast?latitude={lats}&longitude={lons}"
        "&forecast_days=6&timeformat=unixtime")
 
 
-def grid_for_race(marks, pad=1.5):
-    lats = [m["lat"] for m in marks]
-    lons = [m["lon"] for m in marks]
+def race_points(db, race_id):
+    """Where the race is: its marks, every virtual boat on the water and the
+    last fix of every tracked real boat. A great-circle fleet sails well
+    off the straight line between the marks, so a grid drawn around the
+    marks alone misses it; each snapshot draws its own grid, so the
+    coverage follows the fleet as it spreads."""
+    pts = [(m["lat"], m["lon"]) for m in db.execute(
+        "SELECT lat, lon FROM marks WHERE race_id=?", (race_id,))]
+    pts += [(b["lat"], b["lon"]) for b in db.execute(
+        "SELECT lat, lon FROM boats WHERE race_id=? AND lat IS NOT NULL", (race_id,))]
+    pts += [(b["last_lat"], b["last_lon"]) for b in db.execute(
+        "SELECT last_lat, last_lon FROM real_boats WHERE race_id=? AND last_lat IS NOT NULL",
+        (race_id,))]
+    return pts
+
+
+def grid_for_race(points, pad=PAD_DEG):
+    """(la1, lo1, step, ni, nj): the north-west corner, spacing and size of
+    the coarsest-necessary grid covering the points plus `pad` degrees."""
+    lats = [p[0] for p in points]
+    lons = [p[1] for p in points]
     la_n, la_s = max(lats) + pad, min(lats) - pad
     lo_w, lo_e = min(lons) - pad, max(lons) + pad
     for step in (0.25, 0.5, 1.0, 2.0, 4.0):
@@ -42,9 +61,7 @@ def grid_for_race(marks, pad=1.5):
 
 def make_snapshot(db, race):
     """Fetch the current forecast for the race area and store it as GRIB."""
-    marks = db.execute("SELECT * FROM marks WHERE race_id=? ORDER BY seq",
-                       (race["id"],)).fetchall()
-    la1, lo1, step, ni, nj = grid_for_race(marks)
+    la1, lo1, step, ni, nj = grid_for_race(race_points(db, race["id"]))
     points = [(round(la1 - j * step, 3), round(lo1 + i * step, 3))
               for j in range(nj) for i in range(ni)]     # N→S rows, W→E cols
 
