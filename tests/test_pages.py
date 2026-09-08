@@ -3,7 +3,7 @@ import pytest
 
 
 @pytest.mark.parametrize("path,needle", [
-    ("/", "Route the real race"),
+    ("/", "Sail the real weather"),
     ("/race", "Enter this race"),
     ("/race", "Official results"),
     ("/race", "Wind (latest forecast)"),
