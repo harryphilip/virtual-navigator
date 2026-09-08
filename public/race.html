@@ -234,9 +234,10 @@
       <h2>Forecasts (GRIB)</h2>
       <p class="small muted" style="margin:2px 0 8px">
         The wind the fleet is sailing in, saved every 6 hours from the same
-        model that drives the boats (Open-Meteo, 10 m wind, GRIB-1). Load a
-        file into your routing software. Older files show what was known at
-        the time.</p>
+        model that drives the boats (Open-Meteo, 10 m wind, GRIB-1). The
+        newest one is drawn on the chart as the wind overlay. Load a file
+        into your routing software. Older files show what was known at the
+        time.</p>
       <div id="fx_list" class="small muted">No forecasts yet; the first is saved within a minute.</div>
     </div>
 
@@ -329,6 +330,186 @@ const osmLayer = vnTileLayer({ maxZoom: 18 });
 const seamarks = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
   maxZoom: 18, attribution: 'OpenSeaMap' });
 
+/* ---- wind overlay ---------------------------------------------------
+   The latest forecast snapshot (the newest GRIB in the side panel) drawn
+   over the chart: the wind the fleet is sailing in, frame by frame through
+   the forecast. Arrows point where the wind blows to, coloured by speed;
+   the slider steps through the forecast hours and follows the clock until
+   it is moved; hovering the chart reads the field under the pointer. */
+let wind = null;            // /api/races/:id/wind — null until the first snapshot
+let windFrame = 0;          // index into wind.frames
+let windFollow = true;      // the frame tracks the clock until the slider moves
+const WIND_STOPS = [[0, '#9ec5e6'], [5, '#4a90d9'], [10, '#2b9a55'], [15, '#d9b400'],
+                    [20, '#f07a00'], [25, '#d62828'], [30, '#8e24aa'], [40, '#4a148c']];
+function mixHex(a, b, f) {
+  const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const x = p(a), y = p(b);
+  return 'rgb(' + x.map((c, i) => Math.round(c + (y[i] - c) * f)).join(',') + ')';
+}
+function windColor(kn) {
+  for (let i = 1; i < WIND_STOPS.length; i++) {
+    const [k0, c0] = WIND_STOPS[i - 1], [k1, c1] = WIND_STOPS[i];
+    if (kn <= k1) return mixHex(c0, c1, Math.max(0, kn - k0) / (k1 - k0));
+  }
+  return WIND_STOPS[WIND_STOPS.length - 1][1];
+}
+/* bilinear sample of the shown frame at a position; null off the grid.
+   The grid runs west→east from lo1 and north→south from la1. */
+function windAt(lat, lon) {
+  const fr = wind && wind.frames[windFrame];
+  if (!fr) return null;
+  const { la1, lo1, step, ni, nj } = wind;
+  const span = 360 / step;
+  let x = (lon - lo1) / step;
+  x = ((x % span) + span) % span;            // 190°W and 170°E are one meridian
+  const y = (la1 - lat) / step;
+  if (y < 0 || y > nj - 1 || x > ni - 1) return null;
+  const i0 = Math.min(Math.floor(x), ni - 1), j0 = Math.min(Math.floor(y), nj - 1);
+  const i1 = Math.min(i0 + 1, ni - 1), j1 = Math.min(j0 + 1, nj - 1);
+  const fx = x - i0, fy = y - j0, k = (j, i) => j * ni + i;
+  const at = a => (a[k(j0, i0)] * (1 - fx) + a[k(j0, i1)] * fx) * (1 - fy)
+                + (a[k(j1, i0)] * (1 - fx) + a[k(j1, i1)] * fx) * fy;
+  const u = at(fr.u), v = at(fr.v);
+  return { u, v, kn: Math.hypot(u, v), from: (Math.atan2(u, v) * 180 / Math.PI + 180) % 360 };
+}
+const WindLayer = L.Layer.extend({
+  onAdd(m) {
+    this._c = L.DomUtil.create('canvas', 'leaflet-zoom-hide wind-canvas');
+    m.getPanes().overlayPane.appendChild(this._c);
+    m.on('moveend zoomend resize', this._reset, this);
+    windCtl.addTo(m);
+    this._reset();
+  },
+  onRemove(m) {
+    L.DomUtil.remove(this._c);
+    m.off('moveend zoomend resize', this._reset, this);
+    windCtl.remove();
+  },
+  _reset() {
+    const size = map.getSize(), dpr = window.devicePixelRatio || 1;
+    L.DomUtil.setPosition(this._c, map.containerPointToLayerPoint([0, 0]));
+    this._c.width = Math.round(size.x * dpr); this._c.height = Math.round(size.y * dpr);
+    this._c.style.width = size.x + 'px'; this._c.style.height = size.y + 'px';
+    this._dpr = dpr;
+    this.draw();
+  },
+  draw() {
+    if (!this._c) return;
+    const ctx = this._c.getContext('2d'), size = map.getSize();
+    ctx.setTransform(this._dpr || 1, 0, 0, this._dpr || 1, 0, 0);
+    ctx.clearRect(0, 0, size.x, size.y);
+    if (!wind) return;
+    // one arrow every SP screen pixels, on a grid anchored to the world so
+    // arrows stay put while the chart is dragged
+    const SP = 36, min = map.getPixelBounds().min;
+    const x0 = ((-min.x % SP) + SP) % SP, y0 = ((-min.y % SP) + SP) % SP;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (let y = y0; y < size.y; y += SP) {
+      for (let x = x0; x < size.x; x += SP) {
+        const ll = map.containerPointToLatLng([x, y]);
+        const w = windAt(ll.lat, ll.lng);
+        if (!w || !(w.kn >= 0)) continue;
+        const ang = Math.atan2(w.u, w.v);          // toward, clockwise from north
+        const dx = Math.sin(ang), dy = -Math.cos(ang), px = -dy, py = dx;
+        const len = 9 + Math.min(w.kn, 36) * 0.25;  // a little longer when it blows
+        const hx = x + dx * len / 2, hy = y + dy * len / 2;
+        const tx = x - dx * len / 2, ty = y - dy * len / 2;
+        const arrow = () => {
+          ctx.beginPath();
+          ctx.moveTo(tx, ty); ctx.lineTo(hx, hy);
+          ctx.moveTo(hx - dx * 5 + px * 3.5, hy - dy * 5 + py * 3.5);
+          ctx.lineTo(hx, hy);
+          ctx.lineTo(hx - dx * 5 - px * 3.5, hy - dy * 5 - py * 3.5);
+        };
+        ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 4; arrow(); ctx.stroke();
+        ctx.strokeStyle = windColor(w.kn); ctx.lineWidth = 2; arrow(); ctx.stroke();
+      }
+    }
+  },
+});
+const windLayer = new WindLayer();
+/* stacked above the fleet legend: the bottom-left corner is the minimap's */
+const windCtl = L.control({ position: 'bottomright' });
+windCtl.onAdd = () => {
+  const d = L.DomUtil.create('div', 'map-legend wind-ctl');
+  const grad = WIND_STOPS.map(([k, c]) => `${c} ${k / 40 * 100}%`).join(', ');
+  d.innerHTML =
+    `<div><b>Wind</b> <span class="wind-valid"></span></div>` +
+    `<input type="range" class="wind-slider" min="0" max="0" value="0" aria-label="Forecast hour">` +
+    `<div><span class="wind-issued"></span> <a href="#" class="wind-now" title="Back to the current hour">now</a></div>` +
+    `<div class="wind-read muted">hover the chart to read the wind</div>` +
+    `<div class="wind-scale" style="background:linear-gradient(to right, ${grad})"></div>` +
+    `<div class="wind-ticks"><span>0</span><span>10</span><span>20</span><span>30</span><span>40 kn</span></div>`;
+  L.DomEvent.disableClickPropagation(d);
+  L.DomEvent.disableScrollPropagation(d);
+  d.querySelector('.wind-slider').addEventListener('input', ev => {
+    windFrame = +ev.target.value; windFollow = false;
+    windUpdate(); windLayer.draw();
+  });
+  d.querySelector('.wind-now').addEventListener('click', ev => {
+    ev.preventDefault(); windFollow = true;
+    windPickFrame(); windUpdate(); windLayer.draw();
+  });
+  windUpdate(d);
+  return d;
+};
+/* while following the clock, the frame nearest to now */
+function windPickFrame() {
+  if (!wind || !windFollow) return false;
+  const now = Date.now() / 1000;
+  let best = 0;
+  wind.frames.forEach((f, i) => {
+    if (Math.abs(f.t - now) < Math.abs(wind.frames[best].t - now)) best = i;
+  });
+  const changed = best !== windFrame;
+  windFrame = best;
+  return changed;
+}
+function windUpdate(el) {
+  const d = el || windCtl.getContainer();   // onAdd passes its div: no container yet
+  if (!d) return;
+  const valid = d.querySelector('.wind-valid'), issued = d.querySelector('.wind-issued');
+  const slider = d.querySelector('.wind-slider'), now = d.querySelector('.wind-now');
+  if (!wind) {
+    valid.textContent = '· no snapshot yet';
+    issued.textContent = 'the first is saved within a minute';
+    slider.max = 0; slider.disabled = true; now.style.display = 'none';
+    return;
+  }
+  const f = wind.frames[windFrame];
+  slider.max = wind.frames.length - 1; slider.value = windFrame; slider.disabled = false;
+  valid.textContent = `· ${vnTime(f.t)} (+${f.fh} h)`;
+  issued.textContent = `snapshot ${vnTime(wind.issued_at)}`;
+  now.style.display = windFollow ? 'none' : '';
+}
+function windReadout(latlng) {
+  const d = windCtl.getContainer();
+  if (!d) return;
+  const el = d.querySelector('.wind-read');
+  const w = latlng && windAt(latlng.lat, latlng.lng);
+  el.textContent = w ? `${fmt1(w.kn)} kn from ${String(Math.round(w.from) % 360).padStart(3, '0')}°`
+                     : (wind ? 'hover the chart to read the wind' : '');
+}
+map.on('mousemove', e => windReadout(e.latlng));
+map.on('mouseout', () => windReadout(null));
+async function loadWind() {
+  let f = null;
+  try { f = await api(`/api/races/${raceId}/wind`); } catch { return; }
+  if (!f) { wind = null; }
+  else if (!wind || f.id !== wind.id) {
+    wind = f;
+    windFrame = Math.min(windFrame, f.frames.length - 1);
+  }
+  windPickFrame(); windUpdate(); windLayer.draw();
+}
+/* each poll: follow the clock; a race still waiting on its first snapshot
+   asks again (the first poll is also the first load) */
+function windTick() {
+  if (!wind) { loadWind().catch(() => {}); return; }
+  if (windPickFrame()) { windUpdate(); windLayer.draw(); }
+}
+windLayer.addTo(map);
+
 /* OpenStreetMap is the default everywhere: it paints in a second. The NOAA
    ENC chart (US waters only) renders one tile per request from an ArcGIS
    export endpoint and can take fifteen seconds to fill, so it is opt-in
@@ -336,7 +517,7 @@ const seamarks = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.p
 let chartMode = false;
 osmLayer.addTo(map);
 L.control.layers({ 'OpenStreetMap': osmLayer, 'NOAA chart (US waters, slow)': chartLayer },
-                 { 'Seamarks (OpenSeaMap)': seamarks }).addTo(map);
+                 { 'Seamarks (OpenSeaMap)': seamarks, 'Wind (latest forecast)': windLayer }).addTo(map);
 const loadingNote = L.control({ position: 'topright' });
 loadingNote.onAdd = () => {
   const d = L.DomUtil.create('div', 'map-legend');
@@ -571,6 +752,7 @@ async function refresh() {
   fleetBounds = fleetPts.length ? L.latLngBounds(fleetPts).pad(0.2) : null;
   if (!hadFleet && fleetBounds && !userMoved) fitHome();
   renderGate(state);
+  windTick();
   drawFleet();
   drawLeaderboard();
   fillCompare();
@@ -1319,6 +1501,7 @@ setInterval(() => {
   await loadRace();
   await showManage();
   await refresh();
+  setInterval(() => { if (document.visibilityState === 'visible') loadWind().catch(() => {}); }, 300000);
   // poll only while the page is visible; catch up the moment it is again
   setInterval(() => { if (document.visibilityState === 'visible') refresh().catch(() => {}); }, 60000);
   document.addEventListener('visibilitychange', () => {

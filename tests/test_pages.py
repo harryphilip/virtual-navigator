@@ -6,6 +6,7 @@ import pytest
     ("/", "Route the real race"),
     ("/race", "Enter this race"),
     ("/race", "Official results"),
+    ("/race", "Wind (latest forecast)"),
     ("/user", "Route history"),
     ("/how", "How the race is sailed"),
     ("/reset", "Choose a new password"),

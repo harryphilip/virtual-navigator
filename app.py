@@ -22,7 +22,7 @@ from vn.ais import name_matches
 from vn.compare import CompareError, compare
 from vn.db import add_race_log, delete_user, get_db
 from vn.fleetgate import fleet_gate, open_gate, stamp, virtual_start
-from vn.forecast import make_snapshot
+from vn.forecast import latest_field, make_snapshot
 from vn.nor import extract_race, MAX_DOC_BYTES
 from vn.gpx import parse_coord, parse_route, parse_track, route_to_gpx, track_to_gpx
 from vn.polar import Polar
@@ -1839,6 +1839,20 @@ def list_forecasts(race_id):
                         for k in ("step", "ni", "nj", "bytes")},
                      "hours": len(json.loads(r["meta_json"]).get("hours", []))}
                     for r in rows])
+
+
+@app.get("/api/races/<int:race_id>/wind")
+def race_wind(race_id):
+    """The latest snapshot as a wind field for the chart overlay: what the
+    fleet is sailing in, frame by frame through the forecast. `null` until
+    the first snapshot is saved."""
+    db = get_db()
+    if not _race_or_404(db, race_id):
+        return _err("race not found", 404)
+    field = latest_field(db, race_id)
+    resp = jsonify(field)
+    resp.headers["Cache-Control"] = "private, max-age=60"
+    return resp
 
 
 @app.get("/api/forecasts/<int:snap_id>.grb")
